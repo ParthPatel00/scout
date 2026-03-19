@@ -4,6 +4,7 @@ mod search;
 mod storage;
 mod tui;
 mod types;
+mod watch;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -110,6 +111,47 @@ enum Command {
         #[arg(short, long, default_value = ".")]
         path: PathBuf,
     },
+
+    /// Background daemon and git hooks management.
+    Daemon {
+        #[command(subcommand)]
+        action: DaemonCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum DaemonCommand {
+    /// Start the background file-watching daemon.
+    Start {
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+    },
+    /// Stop the running daemon.
+    Stop {
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+    },
+    /// Show daemon status (PID, uptime, last update).
+    Status {
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+    },
+    /// (Internal) Run the daemon event loop in the foreground.
+    #[command(hide = true)]
+    Run {
+        #[arg(short, long)]
+        path: PathBuf,
+    },
+    /// Install post-commit/merge/checkout git hooks.
+    InstallHooks {
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+    },
+    /// Batch-update the index for all changed files (no daemon required).
+    Update {
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -177,6 +219,26 @@ fn main() -> Result<()> {
         Command::Cleanup { path } => {
             cli::maintenance::cleanup(cli::maintenance::CleanupArgs { path })?;
         }
+        Command::Daemon { action } => match action {
+            DaemonCommand::Start { path } => {
+                cli::daemon::start(cli::daemon::StartArgs { path })?;
+            }
+            DaemonCommand::Stop { path } => {
+                cli::daemon::stop(cli::daemon::StopArgs { path })?;
+            }
+            DaemonCommand::Status { path } => {
+                cli::daemon::status(cli::daemon::StatusArgs { path })?;
+            }
+            DaemonCommand::Run { path } => {
+                cli::daemon::run(cli::daemon::RunArgs { path })?;
+            }
+            DaemonCommand::InstallHooks { path } => {
+                cli::daemon::install_hooks(cli::daemon::InstallHooksArgs { path })?;
+            }
+            DaemonCommand::Update { path } => {
+                cli::daemon::update(cli::daemon::UpdateArgs { path })?;
+            }
+        },
     }
 
     Ok(())

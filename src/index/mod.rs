@@ -1,4 +1,5 @@
 pub mod parser;
+pub mod updater;
 pub mod walker;
 
 use anyhow::{Context, Result};

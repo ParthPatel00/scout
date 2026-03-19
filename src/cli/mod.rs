@@ -1,3 +1,4 @@
+pub mod daemon;
 pub mod index;
 pub mod maintenance;
 pub mod report;

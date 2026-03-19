@@ -81,6 +81,16 @@ pub fn within_line_limit(content: &str) -> bool {
     content.chars().filter(|&c| c == '\n').count() < MAX_FILE_LINES
 }
 
+/// Returns the set of excluded directory names (for the native watcher).
+pub fn excluded_dirs() -> std::collections::HashSet<&'static str> {
+    EXCLUDED_DIRS.iter().copied().collect()
+}
+
+/// Returns true if the path has a supported source file extension.
+pub fn is_supported_extension(path: &std::path::Path) -> bool {
+    is_indexable(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
