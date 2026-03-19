@@ -30,14 +30,26 @@ cargo release minor   # new features: 0.1.2 → 0.2.0
 cargo release major   # breaking:     0.1.2 → 1.0.0
 ```
 
-That single command:
+That single command does everything:
 1. Bumps the version in `Cargo.toml`
 2. Runs `cargo test` to make sure nothing is broken
-3. Commits (`release 0.1.3`)
-4. Tags (`v0.1.3`)
+3. Commits with message `release 0.1.3`
+4. Creates tag `v0.1.3`
 5. Pushes the commit and tag to `origin main`
 
 GitHub Actions picks up the tag and builds + publishes the release (~5 minutes).
+
+> **Important:** `Cargo.toml` must always match the latest tag. If you ever tag manually
+> without using `cargo-release`, sync it before the next release:
+>
+> ```bash
+> # Example: tags are at v0.1.3 but Cargo.toml still says 0.1.0
+> # Edit Cargo.toml: version = "0.1.3"
+> git add Cargo.toml
+> git commit -m "chore: sync Cargo.toml version to 0.1.3"
+> git push origin main
+> # Now cargo release patch will correctly produce 0.1.4
+> ```
 
 ---
 
