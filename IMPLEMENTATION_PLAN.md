@@ -27,8 +27,8 @@ After completing any phase and before starting the next, do the following:
 | 2 | Fast Search | Tantivy BM25 + basic CLI | ✅ Complete |
 | 3 | Smart Search | Call graphs, filters, fusion ranking | ✅ Complete |
 | 4 | TUI & UX | Ratatui interface, syntax highlighting, output formats | ✅ Complete |
-| 5 | Production Hardening | Concurrency, corruption recovery, migration, maintenance | 🔄 In progress |
-| 6 | Daemon & File Watching | Background indexing, incremental updates, git hooks | ⬜ Not started |
+| 5 | Production Hardening | Concurrency, corruption recovery, migration, maintenance | ✅ Complete |
+| 6 | Daemon & File Watching | Background indexing, incremental updates, git hooks | 🔄 In progress |
 | 7 | Local AI Embeddings | Candle + UniXcoder, vector DB, hybrid search | ⬜ Not started |
 | 8 | Cross-Repo & Storage Opt. | Multi-repo registry, compression, deduplication | ⬜ Not started |
 | 9 | Cloud AI & Security | Voyage/OpenAI APIs, keychain, rate limiting | ⬜ Not started |

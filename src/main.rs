@@ -90,6 +90,26 @@ enum Command {
         #[command(subcommand)]
         kind: ReportCommand,
     },
+
+    /// Wipe the index and regenerate it from scratch.
+    Rebuild {
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Compact the database, refresh statistics, and remove orphaned data.
+    Optimize {
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+    },
+
+    /// Remove index entries for files that have been deleted from disk.
+    Cleanup {
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -147,6 +167,15 @@ fn main() -> Result<()> {
                 ReportCommand::UnusedFunctions => cli::report::ReportKind::UnusedFunctions,
             };
             cli::report::run(cli::report::ReportArgs { path, kind: report_kind })?;
+        }
+        Command::Rebuild { path, verbose } => {
+            cli::maintenance::rebuild(cli::maintenance::RebuildArgs { path, verbose })?;
+        }
+        Command::Optimize { path } => {
+            cli::maintenance::optimize(cli::maintenance::OptimizeArgs { path })?;
+        }
+        Command::Cleanup { path } => {
+            cli::maintenance::cleanup(cli::maintenance::CleanupArgs { path })?;
         }
     }
 

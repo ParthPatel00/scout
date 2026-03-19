@@ -6,7 +6,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
 
 use crate::index::{self, walker};
-use crate::storage::{sqlite, tantivy_store};
+use crate::storage::{backup, lock, migration, sqlite, tantivy_store};
 use crate::types::{CallEdge, FileRecord, Language};
 
 pub struct IndexArgs {
@@ -19,16 +19,25 @@ pub fn run(args: IndexArgs) -> Result<()> {
     let idx_dir = index::index_dir(&root)?;
     let db_path = index::db_path(&idx_dir);
 
+    // Acquire exclusive write lock before touching any index files.
+    let _lock = lock::IndexLock::acquire_exclusive(&idx_dir)?;
+
+    // Load metadata and validate checksum + version before opening the DB.
+    let mut meta = index::load_metadata(&idx_dir)?;
+    backup::validate_checksum(&idx_dir, &meta)?;
+
     let conn = sqlite::open(&db_path)?;
+    migration::run_migrations(&conn, &mut meta)?;
     sqlite::initialize_schema(&conn)?;
+
+    // Snapshot the DB before mutating it.
+    backup::create_backup(&idx_dir)?;
 
     let tantivy_dir = idx_dir.join("tantivy");
     let (tantivy_index, tantivy_schema) = tantivy_store::open_index(&tantivy_dir)?;
     let mut writer = tantivy_index
         .writer(50_000_000)
         .context("failed to open tantivy writer")?;
-
-    let mut meta = index::load_metadata(&idx_dir)?;
     let start = Instant::now();
 
     let files = walker::walk_source_files(&root);
@@ -146,6 +155,9 @@ pub fn run(args: IndexArgs) -> Result<()> {
     }
     meta.num_files = sqlite::count_files(&conn)?;
     meta.num_units = sqlite::count_units(&conn)?;
+    // Drop conn so SQLite flushes WAL before computing checksum.
+    drop(conn);
+    meta.checksum = backup::compute_db_checksum(&idx_dir)?;
     index::save_metadata(&idx_dir, &meta)?;
 
     let elapsed = start.elapsed();
