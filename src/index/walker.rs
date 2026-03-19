@@ -250,7 +250,7 @@ mod tests {
     fn paths(files: &[PathBuf]) -> Vec<String> {
         files
             .iter()
-            .map(|p| p.to_string_lossy().to_string())
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
             .collect()
     }
 
