@@ -119,6 +119,7 @@ pub fn start(args: StartArgs) -> Result<()> {
 
 // ─── Stop ─────────────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 pub struct StopArgs {
     pub path: PathBuf,
 }
