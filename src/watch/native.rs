@@ -1,8 +1,8 @@
-/// Native OS file watcher using the `notify` crate.
-///
-/// Watches source directories for individual file changes and emits
-/// `WatchEvent::Files` with the specific paths that changed. Falls back
-/// gracefully if the OS inotify/kqueue limit is exceeded.
+//! Native OS file watcher using the `notify` crate.
+//!
+//! Watches source directories for individual file changes and emits
+//! `WatchEvent::Files` with the specific paths that changed. Falls back
+//! gracefully if the OS inotify/kqueue limit is exceeded.
 
 use std::path::Path;
 use std::sync::mpsc::Sender;

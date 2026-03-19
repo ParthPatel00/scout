@@ -1,8 +1,8 @@
-/// Index backup and checksum utilities.
-///
-/// Before each write batch the DB is snapshotted to `.scout/backup/`.
-/// A SHA-256 checksum of the DB is stored in `metadata.json` and validated
-/// on every open, enabling early detection of corruption.
+//! Index backup and checksum utilities.
+//!
+//! Before each write batch the DB is snapshotted to `.scout/backup/`.
+//! A SHA-256 checksum of the DB is stored in `metadata.json` and validated
+//! on every open, enabling early detection of corruption.
 
 use std::path::Path;
 

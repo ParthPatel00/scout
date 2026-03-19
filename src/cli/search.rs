@@ -67,7 +67,7 @@ pub fn run(args: SearchArgs) -> Result<()> {
     // Without model → 2-component fusion (BM25 + name-match). No warning.
     // --semantic is the one exception: it means "vector only, no BM25".
     let model: Option<Box<dyn crate::ml::EmbeddingModel>> =
-        crate::ml::model::load_model().ok().map(|m| m);
+        crate::ml::model::load_model().ok();
 
     let results = if args.semantic {
         // Pure vector search: only warn if the model is genuinely missing.

@@ -8,7 +8,9 @@ pub trait EmbeddingModel: Send + Sync {
     /// Embed a batch of text snippets, returning one f32 vector per input.
     fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>>;
     /// Output dimension (e.g. 768 for UniXcoder).
+    #[allow(dead_code)]
     fn dimension(&self) -> usize;
     /// Human-readable model identifier (stored in `code_units.embedding_model`).
+    #[allow(dead_code)]
     fn model_name(&self) -> &str;
 }

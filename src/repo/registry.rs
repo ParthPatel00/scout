@@ -1,7 +1,7 @@
-/// Multi-repo registry stored at `~/.config/scout/repos.json`.
-///
-/// Each entry records a human-readable name and an absolute path so that
-/// cross-repo search commands can locate every registered index.
+//! Multi-repo registry stored at `~/.config/scout/repos.json`.
+//!
+//! Each entry records a human-readable name and an absolute path so that
+//! cross-repo search commands can locate every registered index.
 
 use std::path::{Path, PathBuf};
 

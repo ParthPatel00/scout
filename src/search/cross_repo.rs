@@ -1,8 +1,8 @@
-/// Cross-repo federated search and similarity detection.
-///
-/// Runs independent BM25 (+ optional vector) searches across every registered
-/// repo and merges the results into a single ranked list.  Results are tagged
-/// with `repo_name` so the caller can display provenance.
+//! Cross-repo federated search and similarity detection.
+//!
+//! Runs independent BM25 (+ optional vector) searches across every registered
+//! repo and merges the results into a single ranked list.  Results are tagged
+//! with `repo_name` so the caller can display provenance.
 
 use std::path::Path;
 
@@ -172,6 +172,7 @@ pub fn find_similar(
 /// Before calling the ML model, check whether any registered repo already has
 /// an embedding for a unit with the same body hash.  Returns the embedding
 /// vector if found.
+#[allow(dead_code)]
 pub fn find_cached_embedding(
     body_hash: &str,
     registry: &Registry,

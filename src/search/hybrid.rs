@@ -1,7 +1,7 @@
-/// Hybrid search: BM25 + vector similarity fused via RRF.
-///
-/// This is the default search mode. Falls back gracefully to BM25 + name-match
-/// when no model or vector store is available — no user action required.
+//! Hybrid search: BM25 + vector similarity fused via RRF.
+//!
+//! This is the default search mode. Falls back gracefully to BM25 + name-match
+//! when no model or vector store is available — no user action required.
 
 use std::path::Path;
 

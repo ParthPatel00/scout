@@ -1,8 +1,8 @@
-/// Git-based file watcher — monitors `.git/index` for modifications.
-///
-/// A change to `.git/index` means a commit, checkout, or merge occurred.
-/// We respond by triggering a full hash-comparison scan (CheckAll) rather
-/// than tracking specific paths, which is reliable across all git operations.
+//! Git-based file watcher — monitors `.git/index` for modifications.
+//!
+//! A change to `.git/index` means a commit, checkout, or merge occurred.
+//! We respond by triggering a full hash-comparison scan (CheckAll) rather
+//! than tracking specific paths, which is reliable across all git operations.
 
 use std::path::Path;
 use std::sync::mpsc::Sender;

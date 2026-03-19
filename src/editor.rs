@@ -6,6 +6,7 @@ use anyhow::{bail, Result};
 ///
 /// If `override_cmd` is set (from `editor.command` in config) it takes
 /// precedence over env-var and PATH detection.
+#[allow(dead_code)]
 pub fn open(file_path: &str, line: usize, repo_root: &Path) -> Result<()> {
     open_with(file_path, line, repo_root, None)
 }
@@ -134,7 +135,7 @@ fn classify(cmd: String) -> Editor {
     let base = Path::new(&cmd)
         .file_name()
         .map(|n| n.to_string_lossy().to_lowercase())
-        .unwrap_or_else(|| cmd.to_lowercase().into());
+        .unwrap_or_else(|| cmd.to_lowercase());
 
     if base == "code" || base == "code.cmd" || base == "cursor" || base.starts_with("code-") {
         Editor::VSCode

@@ -1,7 +1,7 @@
-/// Reciprocal Rank Fusion — combines multiple ranked lists.
-///
-/// Phase 3: BM25 + name-match (K_BM25=60, K_NAME=5)
-/// Phase 7: adds vector-similarity component (K_VEC=60)
+//! Reciprocal Rank Fusion — combines multiple ranked lists.
+//!
+//! Phase 3: BM25 + name-match (K_BM25=60, K_NAME=5)
+//! Phase 7: adds vector-similarity component (K_VEC=60)
 
 use std::collections::HashMap;
 
@@ -55,7 +55,7 @@ pub fn fuse(query: &str, bm25_results: Vec<SearchResult>) -> Vec<SearchResult> {
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     // Reconstruct result list in fused order, updating scores.
-    let mut results = bm25_results;
+    let results = bm25_results;
     let reordered: Vec<SearchResult> = scored
         .into_iter()
         .map(|(orig_idx, rrf_score)| {
@@ -119,7 +119,7 @@ pub fn fuse_hybrid(
 
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    let mut results = bm25_results;
+    let results = bm25_results;
     let reordered: Vec<SearchResult> = scored
         .into_iter()
         .map(|(orig_idx, rrf_score)| {

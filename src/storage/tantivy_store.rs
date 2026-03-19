@@ -107,7 +107,7 @@ pub fn index_file_units(
         doc.add_text(schema.name, &unit.name);
         doc.add_text(schema.file_path, &unit.file_path);
         doc.add_text(schema.language, unit.language.as_str());
-        doc.add_text(schema.unit_type, &unit.unit_type.to_string());
+        doc.add_text(schema.unit_type, unit.unit_type.to_string());
         doc.add_text(schema.body, &unit.body);
         if let Some(sig) = &unit.full_signature {
             doc.add_text(schema.signature, sig);

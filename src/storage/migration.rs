@@ -1,10 +1,10 @@
-/// Schema version migration system.
-///
-/// `IndexMetadata.version` tracks the index format. On open, this module
-/// compares the stored version against `CURRENT_VERSION`:
-///   - Patch-compatible (same major): run incremental migrations silently.
-///   - Newer than binary: hard error — upgrade scout.
-///   - Major version too old: hard error — requires `scout rebuild`.
+//! Schema version migration system.
+//!
+//! `IndexMetadata.version` tracks the index format. On open, this module
+//! compares the stored version against `CURRENT_VERSION`:
+//!   - Patch-compatible (same major): run incremental migrations silently.
+//!   - Newer than binary: hard error — upgrade scout.
+//!   - Major version too old: hard error — requires `scout rebuild`.
 
 use anyhow::{bail, Result};
 use rusqlite::Connection;
@@ -44,21 +44,9 @@ pub fn run_migrations(conn: &Connection, meta: &mut IndexMetadata) -> Result<()>
 /// Apply migrations from `from_version` up to (but not including) `to_version`.
 /// Add new `migrate_vN_to_vM` functions here as the schema evolves.
 fn migrate(conn: &Connection, from_version: u32, to_version: u32) -> Result<()> {
-    let mut v = from_version;
-    while v < to_version {
-        match v {
-            // Example future migration:
-            // 1 => migrate_v1_to_v2(conn)?,
-            _ => {
-                bail!(
-                    "No migration path from v{v} to v{}. Run `scout rebuild`.",
-                    v + 1
-                );
-            }
-        }
-        v += 1;
-    }
-    let _ = conn; // suppress unused warning until real migrations exist
+    let _v = from_version;
+    // No migrations needed yet.
+    let _ = (conn, to_version);
     Ok(())
 }
 

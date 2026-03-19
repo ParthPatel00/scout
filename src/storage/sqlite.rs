@@ -174,6 +174,7 @@ fn unit_type_from_str(s: &str) -> UnitType {
 }
 
 /// Load all code units for a given file path.
+#[allow(dead_code)]
 pub fn units_for_file(conn: &Connection, file_path: &str) -> Result<Vec<CodeUnit>> {
     let mut stmt = conn.prepare(
         "SELECT id, file_path, language, unit_type, name, full_signature, docstring,
@@ -188,6 +189,7 @@ pub fn units_for_file(conn: &Connection, file_path: &str) -> Result<Vec<CodeUnit
 }
 
 /// Load all code units in the index.
+#[allow(dead_code)]
 pub fn all_units(conn: &Connection) -> Result<Vec<CodeUnit>> {
     let mut stmt = conn.prepare(
         "SELECT id, file_path, language, unit_type, name, full_signature, docstring,

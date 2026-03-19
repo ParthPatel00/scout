@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
+#[allow(dead_code)]
 pub const EMBEDDING_DIM: usize = 768;
 pub const MODEL_ID: &str = "microsoft/unixcoder-base";
 

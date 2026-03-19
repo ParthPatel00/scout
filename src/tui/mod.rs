@@ -17,6 +17,7 @@ use crate::types::SearchResult;
 /// Application state for the interactive TUI.
 pub struct App {
     pub results: Vec<SearchResult>,
+    #[allow(dead_code)]
     pub query: String,
     /// Absolute path to the repository root (for opening files in editor).
     pub repo_root: PathBuf,

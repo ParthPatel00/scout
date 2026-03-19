@@ -44,6 +44,6 @@ pub fn save_metadata(index_dir: &Path, meta: &IndexMetadata) -> Result<()> {
     std::fs::write(&tmp, contents)
         .with_context(|| format!("failed to write {}", tmp.display()))?;
     std::fs::rename(&tmp, &path)
-        .with_context(|| format!("failed to rename metadata tmp file"))?;
+        .with_context(|| "failed to rename metadata tmp file")?;
     Ok(())
 }

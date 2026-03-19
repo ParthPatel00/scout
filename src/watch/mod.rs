@@ -9,6 +9,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct FileChange {
     pub path: PathBuf,
+    #[allow(dead_code)]
     pub kind: ChangeKind,
 }
 

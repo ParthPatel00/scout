@@ -1,7 +1,7 @@
-/// Hash-based polling fallback watcher.
-///
-/// Every `interval`, walks all source files and emits `WatchEvent::CheckAll`.
-/// Used as a last resort when git and native watching are both unavailable.
+//! Hash-based polling fallback watcher.
+//!
+//! Every `interval`, walks all source files and emits `WatchEvent::CheckAll`.
+//! Used as a last resort when git and native watching are both unavailable.
 
 use std::path::Path;
 use std::sync::mpsc::Sender;

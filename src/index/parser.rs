@@ -18,6 +18,7 @@ pub fn parse_file(file_path: &str, source: &str, language: &Language) -> Result<
 
     let mut parser = Parser::new();
     parser.set_language(&ts_lang)?;
+    #[allow(deprecated)]
     parser.set_timeout_micros(10_000_000); // 10 seconds
 
     let tree = match parser.parse(source, None) {

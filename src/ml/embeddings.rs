@@ -1,8 +1,8 @@
-/// Lazy embedding generation pipeline.
-///
-/// Fetches all code units that lack an embedding, processes them in batches of
-/// BATCH_SIZE using the provided model, writes vectors to the VectorStore, and
-/// marks each unit as embedded in SQLite.
+//! Lazy embedding generation pipeline.
+//!
+//! Fetches all code units that lack an embedding, processes them in batches of
+//! BATCH_SIZE using the provided model, writes vectors to the VectorStore, and
+//! marks each unit as embedded in SQLite.
 
 use std::path::Path;
 
@@ -13,10 +13,12 @@ use crate::storage::vectors::VectorStore;
 use super::EmbeddingModel;
 
 /// Number of texts embedded per model call.
+#[allow(dead_code)]
 const BATCH_SIZE: usize = 64;
 
 /// Generate embeddings for every code unit that has `has_embedding = 0`.
 /// Returns the number of units newly embedded.
+#[allow(dead_code)]
 pub fn generate_embeddings(
     conn: &rusqlite::Connection,
     vector_path: &Path,
@@ -90,6 +92,7 @@ pub fn generate_embeddings(
     Ok(total)
 }
 
+#[allow(dead_code)]
 fn mark_embedded(conn: &rusqlite::Connection, ids: &[i64], model_name: &str) -> Result<()> {
     for id in ids {
         conn.execute(

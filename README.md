@@ -5,7 +5,7 @@
 **Search your codebase the way you think about it.**
 
 ```
-scout "how does authentication work"
+scout "chatbot buttons and components"
 scout "stripe payment retry logic"
 scout "function that validates JWT tokens"
 ```
@@ -67,18 +67,21 @@ When your terminal is interactive, Scout launches a full TUI — navigate with `
 Download the latest binary for your platform from [Releases](https://github.com/ParthPatel00/scout/releases):
 
 **macOS (Apple Silicon)**
+
 ```bash
 curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-aarch64-apple-darwin.tar.gz | tar xz
 sudo mv scout /usr/local/bin/
 ```
 
 **macOS (Intel)**
+
 ```bash
 curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-x86_64-apple-darwin.tar.gz | tar xz
 sudo mv scout /usr/local/bin/
 ```
 
 **Linux (x86_64)**
+
 ```bash
 curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-x86_64-unknown-linux-gnu.tar.gz | tar xz
 sudo mv scout /usr/local/bin/
@@ -88,6 +91,7 @@ sudo mv scout /usr/local/bin/
 Download `scout-x86_64-pc-windows-msvc.zip` from [Releases](https://github.com/ParthPatel00/scout/releases), extract, and add to your `PATH`.
 
 Verify the install:
+
 ```bash
 scout --version
 # scout 0.1.0
@@ -106,14 +110,17 @@ brew install ParthPatel00/tap/scout
 ### Option 3 — cargo install (requires Rust)
 
 If you have Rust installed:
+
 ```bash
 cargo install --git https://github.com/ParthPatel00/scout
 ```
 
 Don't have Rust? Install it in one command — it takes about 60 seconds:
+
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
+
 Then restart your terminal and run `cargo install` above.
 
 ---
@@ -147,39 +154,47 @@ Here is every question the wizard asks and what it means:
 ---
 
 **1 — How many results to show by default?**
+
 ```
   5 / 10 (default) / 15 / 20 / 30 / 50
 ```
+
 Sets `search.limit`. You can always override per-search with `--limit N`.
 
 ---
 
 **2 — Default output format**
+
 ```
   Plain text with TUI when interactive (recommended)
   Always plain text  (good for scripts / piping)
   JSON
   CSV
 ```
+
 In a terminal, Scout launches an interactive TUI. Piped or redirected, it always outputs plain text. Choose "Always plain text" if you want consistent output regardless of context.
 
 ---
 
 **3 — Show test files in search results?**
+
 ```
   No  — include test files in results
   Yes — hide test files from results
 ```
+
 Sets `search.exclude_tests`. Useful if your tests are noisy — you can still include them per-search with `--no-exclude-tests`.
 
 ---
 
 **4 — Keep the index fresh automatically?**
+
 ```
   No  — I'll run `scout index` manually when I want to update
   Yes — via daemon   (background process, watches file changes)
   Yes — via git hooks  (re-indexes on commit / merge / checkout)
 ```
+
 If you pick **No**, you run `scout index` yourself whenever you want the index updated.
 
 If you pick **daemon** or **git hooks**, Scout builds the initial index right now, then sets up the chosen method to keep it current automatically. Nothing to run manually after that.
@@ -190,18 +205,21 @@ If you pick **daemon** or **git hooks**, Scout builds the initial index right no
 ---
 
 **5 — Enable AI-powered semantic search?**
+
 ```
   Yes — download the model now  (~350 MB)
   Yes — I'll download it later with `scout index --download-model`
   No  — keyword search is fine for now
 ```
-Scout's default search uses BM25 + name-match — fast and accurate for most queries. The AI model adds a third component (vector embeddings) that understands *concepts*, not just keywords. With it, `scout "functions that handle token expiry"` finds code that never literally says those words.
+
+Scout's default search uses BM25 + name-match — fast and accurate for most queries. The AI model adds a third component (vector embeddings) that understands _concepts_, not just keywords. With it, `scout "functions that handle token expiry"` finds code that never literally says those words.
 
 The model is ~350 MB and downloaded once to `~/.config/scout/models/`. After that, hybrid search (BM25 + name-match + vectors) runs automatically every time — no flags needed.
 
 ---
 
 **6 — Editor for opening results**
+
 ```
   Auto-detect  (currently: nvim)
   code   — VS Code
@@ -213,22 +231,27 @@ The model is ~350 MB and downloaded once to `~/.config/scout/models/`. After tha
   nano   — Nano
   Other  — enter path
 ```
+
 Sets `editor.command`. This is the editor that opens when you press `Enter` in the TUI. Terminal editors (nvim, vim, helix) take over the screen and return to Scout when you close them. GUI editors (VS Code, Cursor, Zed) open in the background — Scout stays running.
 
 ---
 
 **7 — Install shell completions?**
+
 ```
   Skip for now / Zsh / Bash / Fish
 ```
+
 Prints the command to install tab-completion for your shell. You can run this any time with `scout completions <shell>`.
 
 ---
 
 **8 — Add other repos for cross-repo search now?**
+
 ```
   Yes / No  (you can add them later with `scout repos add <name> <path>`)
 ```
+
 If yes, enter one or more repository paths and short names. Scout registers them so you can search across all of them at once with `--all-repos`.
 
 ---
@@ -258,6 +281,7 @@ scout config edit                           # open config file in your editor
 ```
 
 **Config file** (`~/.config/scout/config.toml`):
+
 ```toml
 [search]
 limit = 20
@@ -305,6 +329,7 @@ Index totals: 312 files, 4,821 units — /your/project/.scout
 Scout only re-parses files whose content has changed (tracked by SHA2 hash). On subsequent runs, unchanged files are skipped instantly. **A 10,000-file codebase re-indexes in under 2 seconds.**
 
 The index lives in `.scout/` at your project root. Add it to `.gitignore`:
+
 ```
 .scout/
 ```
@@ -399,13 +424,13 @@ Press `Enter` on any TUI result to open the file **at the exact line** in your e
 
 Scout detects your editor automatically:
 
-| Priority | Source |
-|----------|--------|
-| 1st | `editor.command` in `~/.config/scout/config.toml` |
-| 2nd | `$SCOUT_EDITOR` environment variable |
-| 3rd | `$VISUAL` environment variable |
-| 4th | `$EDITOR` environment variable |
-| 5th | Auto-detect from PATH: `nvim` → `vim` → `hx` → `nano` → `emacs` → `code` → `zed` |
+| Priority | Source                                                                           |
+| -------- | -------------------------------------------------------------------------------- |
+| 1st      | `editor.command` in `~/.config/scout/config.toml`                                |
+| 2nd      | `$SCOUT_EDITOR` environment variable                                             |
+| 3rd      | `$VISUAL` environment variable                                                   |
+| 4th      | `$EDITOR` environment variable                                                   |
+| 5th      | Auto-detect from PATH: `nvim` → `vim` → `hx` → `nano` → `emacs` → `code` → `zed` |
 
 **Terminal editors** (nvim, vim, helix, nano) take over the terminal and return you to Scout when you close them.
 **GUI editors** (VS Code, Zed, Cursor) open in the background — Scout stays running.
@@ -417,7 +442,7 @@ Scout detects your editor automatically:
 Scout's default search uses **BM25 + name-match** — fast and accurate for keyword-style queries. When the AI model is present, Scout automatically upgrades to **hybrid search**: BM25 + name-match + vector embeddings, all three fused via Reciprocal Rank Fusion.
 
 **Without model:** keyword search only — works immediately, no setup.
-**With model:** concept-level search — finds code by what it *does*, even when the words don't match.
+**With model:** concept-level search — finds code by what it _does_, even when the words don't match.
 
 Example: `scout "functions that handle token expiry"` will surface token refresh logic even if the source code says `refresh_credentials()`, not "token expiry".
 
@@ -439,6 +464,7 @@ scout index
 From this point, every search automatically uses the best available method. No flags needed.
 
 **Force pure vector search** (skips BM25 entirely — requires model):
+
 ```bash
 scout "retry failed network requests" --semantic
 ```
@@ -549,26 +575,26 @@ scout rebuild   # wipe and regenerate from scratch
 
 Benchmarked on a MacBook Pro M2 against a 10,000-function codebase:
 
-| Operation | Time |
-|-----------|------|
-| First index (10k functions) | ~8s |
-| Incremental index (1 changed file) | <200ms |
-| Search query | **<10ms** |
-| Search with 50k functions | ~30ms |
+| Operation                          | Time      |
+| ---------------------------------- | --------- |
+| First index (10k functions)        | ~8s       |
+| Incremental index (1 changed file) | <200ms    |
+| Search query                       | **<10ms** |
+| Search with 50k functions          | ~30ms     |
 
 ---
 
 ## Supported languages
 
-| Language | Functions | Methods | Classes / Structs | Call graph |
-|----------|:---------:|:-------:|:-----------------:|:----------:|
-| Python | ✓ | ✓ | ✓ | ✓ |
-| Rust | ✓ | ✓ | ✓ | ✓ |
-| Go | ✓ | ✓ | ✓ | ✓ |
-| TypeScript | ✓ | ✓ | ✓ | ✓ |
-| JavaScript | ✓ | ✓ | ✓ | ✓ |
-| Java | ✓ | ✓ | ✓ | ✓ |
-| C / C++ | ✓ | ✓ | ✓ | Partial |
+| Language   | Functions | Methods | Classes / Structs | Call graph |
+| ---------- | :-------: | :-----: | :---------------: | :--------: |
+| Python     |     ✓     |    ✓    |         ✓         |     ✓      |
+| Rust       |     ✓     |    ✓    |         ✓         |     ✓      |
+| Go         |     ✓     |    ✓    |         ✓         |     ✓      |
+| TypeScript |     ✓     |    ✓    |         ✓         |     ✓      |
+| JavaScript |     ✓     |    ✓    |         ✓         |     ✓      |
+| Java       |     ✓     |    ✓    |         ✓         |     ✓      |
+| C / C++    |     ✓     |    ✓    |         ✓         |  Partial   |
 
 ---
 
@@ -629,7 +655,7 @@ scout report unused-functions --format json | jq 'length' | xargs -I{} test {} -
 No. Everything runs locally. The index lives in `.scout/` in your project directory. No network requests are made.
 
 **How is this different from `grep` or `ripgrep`?**
-`grep` finds text. Scout finds *functions* — it understands code structure. `scout "validate JWT"` surfaces a function called `check_token` whose body handles JWT validation, even if the words "validate JWT" never appear in its source.
+`grep` finds text. Scout finds _functions_ — it understands code structure. `scout "validate JWT"` surfaces a function called `check_token` whose body handles JWT validation, even if the words "validate JWT" never appear in its source.
 
 **How is this different from GitHub's code search?**
 GitHub search requires your code to be on GitHub. Scout works on private repos, local clones, and fully offline.

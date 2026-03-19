@@ -1,5 +1,5 @@
-/// Incremental single-file reindex logic shared between the daemon and
-/// the `update --batch` command.
+//! Incremental single-file reindex logic shared between the daemon and
+//! the `update --batch` command.
 
 use std::path::Path;
 

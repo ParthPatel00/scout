@@ -1,21 +1,21 @@
-/// Compact vector store with per-vector scalar quantization (f32 → u8, 4× compression).
-///
-/// # File format  (.scout/vectors.bin)
-///
-/// ```text
-/// [magic:   4 bytes = b"CVEC"]
-/// [version: 4 bytes = u32 LE]
-/// [dim:     4 bytes = u32 LE]
-/// [n_vecs:  8 bytes = u64 LE]
-/// [--- body, repeated n_vecs times ---]
-/// [unit_id: 8 bytes = i64 LE]
-/// [v_min:   4 bytes = f32 LE]
-/// [v_max:   4 bytes = f32 LE]
-/// [data:    dim bytes = u8 (quantized)]
-/// ```
-///
-/// The file is memory-mapped for fast random read access.  A ZSTD-compressed
-/// copy is also written alongside for portable backups.
+//! Compact vector store with per-vector scalar quantization (f32 → u8, 4× compression).
+//!
+//! # File format  (.scout/vectors.bin)
+//!
+//! ```text
+//! [magic:   4 bytes = b"CVEC"]
+//! [version: 4 bytes = u32 LE]
+//! [dim:     4 bytes = u32 LE]
+//! [n_vecs:  8 bytes = u64 LE]
+//! [--- body, repeated n_vecs times ---]
+//! [unit_id: 8 bytes = i64 LE]
+//! [v_min:   4 bytes = f32 LE]
+//! [v_max:   4 bytes = f32 LE]
+//! [data:    dim bytes = u8 (quantized)]
+//! ```
+//!
+//! The file is memory-mapped for fast random read access.  A ZSTD-compressed
+//! copy is also written alongside for portable backups.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -45,6 +45,7 @@ struct Record {
 // ─── VectorStore ──────────────────────────────────────────────────────────────
 
 pub struct VectorStore {
+    #[allow(dead_code)]
     path: PathBuf,
     dim: usize,
     records: Vec<Record>,
@@ -53,6 +54,7 @@ pub struct VectorStore {
     hot_cache: HashMap<i64, Vec<f32>>,
 }
 
+#[allow(dead_code)]
 impl VectorStore {
     /// Create a new, empty store.  Nothing is written to disk until `flush()`.
     pub fn new(path: &Path, dim: usize) -> Self {
@@ -268,6 +270,7 @@ impl VectorStore {
 // ─── Quantization helpers ─────────────────────────────────────────────────────
 
 /// Per-vector scalar quantization: map [v_min, v_max] → [0, 255].
+#[allow(dead_code)]
 fn quantize(vec: &[f32]) -> (Vec<u8>, f32, f32) {
     let v_min = vec.iter().cloned().fold(f32::INFINITY, f32::min);
     let v_max = vec.iter().cloned().fold(f32::NEG_INFINITY, f32::max);

@@ -38,7 +38,7 @@ pub fn list(_args: ListArgs) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<20} {:<8} {}", "NAME", "STATUS", "PATH");
+    println!("{:<20} {:<8} PATH", "NAME", "STATUS");
     println!("{}", "-".repeat(70));
     for r in &registry.repos {
         let status = if is_indexed(&r.path) { "indexed" } else { "missing" };

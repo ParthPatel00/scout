@@ -1,8 +1,8 @@
-/// File-based index locking using OS advisory locks.
-///
-/// Writers acquire an exclusive lock; concurrent readers use shared locks.
-/// SQLite WAL mode already handles concurrent reads safely, so shared locks
-/// are mainly a signal to writers that readers are active.
+//! File-based index locking using OS advisory locks.
+//!
+//! Writers acquire an exclusive lock; concurrent readers use shared locks.
+//! SQLite WAL mode already handles concurrent reads safely, so shared locks
+//! are mainly a signal to writers that readers are active.
 
 use std::fs::{File, OpenOptions};
 use std::path::Path;
@@ -21,6 +21,7 @@ impl IndexLock {
         let lock_path = index_dir.join("index.lock");
         let file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .open(&lock_path)
             .with_context(|| format!("failed to open lock file {}", lock_path.display()))?;
@@ -34,10 +35,12 @@ impl IndexLock {
     }
 
     /// Acquire a shared read lock. Multiple readers can hold this simultaneously.
+    #[allow(dead_code)]
     pub fn acquire_shared(index_dir: &Path) -> Result<Self> {
         let lock_path = index_dir.join("index.lock");
         let file = OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .open(&lock_path)
             .with_context(|| format!("failed to open lock file {}", lock_path.display()))?;

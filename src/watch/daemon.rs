@@ -1,7 +1,7 @@
-/// Daemon event loop.
-///
-/// Picks the best available watcher strategy (git → native → polling),
-/// receives change events, and calls the incremental updater.
+//! Daemon event loop.
+//!
+//! Picks the best available watcher strategy (git → native → polling),
+//! receives change events, and calls the incremental updater.
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
@@ -68,13 +68,9 @@ fn process_events(root: &Path, rx: Receiver<WatchEvent>) -> Result<()> {
     let db_path = index::db_path(&idx_dir);
     let tantivy_dir = idx_dir.join("tantivy");
 
-    loop {
+    while let Ok(first) = rx.recv() {
         // Block until an event arrives, then drain any extras that queued up
         // (debounce rapid-fire saves by collecting for up to 200 ms).
-        let first = match rx.recv() {
-            Ok(e) => e,
-            Err(_) => break, // channel closed
-        };
         let mut events = vec![first];
         let deadline = std::time::Instant::now() + Duration::from_millis(200);
         while std::time::Instant::now() < deadline {
