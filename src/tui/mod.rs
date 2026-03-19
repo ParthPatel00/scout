@@ -29,10 +29,17 @@ pub struct App {
     pub open_in_editor: Option<(String, usize)>,
     /// Whether the user has requested to quit.
     pub should_quit: bool,
+    /// Editor command override from config.
+    pub editor_cmd: Option<String>,
 }
 
 impl App {
-    pub fn new(query: String, results: Vec<SearchResult>, repo_root: PathBuf) -> Self {
+    pub fn new(
+        query: String,
+        results: Vec<SearchResult>,
+        repo_root: PathBuf,
+        editor_cmd: Option<String>,
+    ) -> Self {
         Self {
             results,
             query,
@@ -41,6 +48,7 @@ impl App {
             preview_scroll: 0,
             open_in_editor: None,
             should_quit: false,
+            editor_cmd,
         }
     }
 
@@ -84,21 +92,27 @@ impl App {
             let file = r.unit.file_path.clone();
             let line = r.unit.line_start;
             let root = self.repo_root.clone();
+            let cmd = self.editor_cmd.as_deref();
             // Open non-blocking (best-effort; errors are silently ignored so TUI stays up).
-            let _ = crate::editor::open(&file, line, &root);
+            let _ = crate::editor::open_with(&file, line, &root, cmd);
         }
     }
 }
 
 /// Launch the interactive TUI. Returns when the user quits or opens a result.
-pub fn run(query: String, results: Vec<SearchResult>, repo_root: PathBuf) -> Result<()> {
+pub fn run(
+    query: String,
+    results: Vec<SearchResult>,
+    repo_root: PathBuf,
+    editor_cmd: Option<String>,
+) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(query, results, repo_root.clone());
+    let mut app = App::new(query, results, repo_root.clone(), editor_cmd);
 
     loop {
         terminal.draw(|f| ui::render(f, &app))?;
@@ -132,7 +146,7 @@ pub fn run(query: String, results: Vec<SearchResult>, repo_root: PathBuf) -> Res
 
     // If Enter was pressed, open the file in the editor now that the terminal is restored.
     if let Some((file, line)) = app.open_in_editor {
-        crate::editor::open(&file, line, &repo_root)?;
+        crate::editor::open_with(&file, line, &repo_root, app.editor_cmd.as_deref())?;
     }
 
     Ok(())

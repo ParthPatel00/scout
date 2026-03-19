@@ -1,4 +1,4 @@
-/// Multi-repo registry stored at `~/.config/codesearch/repos.json`.
+/// Multi-repo registry stored at `~/.config/scout/repos.json`.
 ///
 /// Each entry records a human-readable name and an absolute path so that
 /// cross-repo search commands can locate every registered index.
@@ -106,10 +106,10 @@ impl Registry {
 
 // ─── Index status ─────────────────────────────────────────────────────────────
 
-/// Return true if a `.codesearch/metadata.db` exists under `repo_path`.
+/// Return true if a `.scout/metadata.db` exists under `repo_path`.
 pub fn is_indexed(repo_path: &Path) -> bool {
     repo_path
-        .join(".codesearch")
+        .join(".scout")
         .join("metadata.db")
         .exists()
 }

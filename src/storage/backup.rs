@@ -1,6 +1,6 @@
 /// Index backup and checksum utilities.
 ///
-/// Before each write batch the DB is snapshotted to `.codesearch/backup/`.
+/// Before each write batch the DB is snapshotted to `.scout/backup/`.
 /// A SHA-256 checksum of the DB is stored in `metadata.json` and validated
 /// on every open, enabling early detection of corruption.
 
@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 use crate::index;
 use crate::types::IndexMetadata;
 
-/// Copy `metadata.db` into `.codesearch/backup/` before a write batch.
+/// Copy `metadata.db` into `.scout/backup/` before a write batch.
 /// Safe to call even if no DB exists yet (first index run).
 pub fn create_backup(index_dir: &Path) -> Result<()> {
     let db_path = index::db_path(index_dir);

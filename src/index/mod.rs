@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 
 use crate::types::IndexMetadata;
 
-/// Returns the `.codesearch/` directory for a given repo root, creating it if needed.
+/// Returns the `.scout/` directory for a given repo root, creating it if needed.
 pub fn index_dir(repo_root: &Path) -> Result<PathBuf> {
-    let dir = repo_root.join(".codesearch");
+    let dir = repo_root.join(".scout");
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create index dir {}", dir.display()))?;
     Ok(dir)

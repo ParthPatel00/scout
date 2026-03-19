@@ -106,12 +106,26 @@ scout optimize/cleanup/rebuild        # Index maintenance
 - `q`/`Esc` — quit
 
 ### Editor detection (`src/editor.rs`)
-Resolution order: `$SCOUT_EDITOR` → `$VISUAL` → `$EDITOR` → auto-detect from PATH.
+Resolution order: `editor.command` config → `$SCOUT_EDITOR` → `$VISUAL` → `$EDITOR` → auto-detect from PATH.
 - VS Code / Cursor: `code --goto file:line` (non-blocking)
 - Zed: `zed file:line` (non-blocking)
 - Neovim/Vim: `nvim +line file` (blocking — takes over the TTY)
 - Helix: `hx file:line` (blocking)
 - Others via `$EDITOR`: `editor +line file` (blocking)
+
+### Config system (`src/config.rs`)
+Persistent preferences at `~/.config/scout/config.toml`. Config values are defaults — CLI flags override them.
+- `search.limit` — default result count (default: 10)
+- `search.no_tui` — always plain text (default: false)
+- `search.format` — default output format: plain/json/csv
+- `search.exclude_tests` — always skip test files (default: false)
+- `index.auto_index` — auto-index on first search (default: false)
+- `editor.command` — override editor auto-detection
+
+### New commands
+- `scout init` — interactive first-run wizard (sets config, installs completions, downloads model)
+- `scout config list/get/set/edit` — manage persistent config
+- `scout completions <bash|zsh|fish>` — print shell completion script to stdout
 
 ## Implementation Plan
 

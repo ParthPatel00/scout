@@ -1,6 +1,6 @@
 /// Compact vector store with per-vector scalar quantization (f32 → u8, 4× compression).
 ///
-/// # File format  (.codesearch/vectors.bin)
+/// # File format  (.scout/vectors.bin)
 ///
 /// ```text
 /// [magic:   4 bytes = b"CVEC"]

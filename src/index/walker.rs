@@ -8,7 +8,7 @@
 //!    and anything else project-specific — automatically, without a static list.
 //!
 //! 2. **Hard-coded directory blocklist** — safety net for repos without a
-//!    .gitignore (or incomplete ones). Also covers our own `.codesearch/` dir.
+//!    .gitignore (or incomplete ones). Also covers our own `.scout/` dir.
 //!
 //! 3. **File-name pattern blocklist** — catches generated files that have valid
 //!    source extensions: `.d.ts`, `.min.js`, `.pb.go`, etc.
@@ -33,7 +33,6 @@ use crate::types::Language;
 
 const BLOCKED_DIRS: &[&str] = &[
     // Our own index
-    ".codesearch",
     ".scout",
     // VCS internals (git itself is handled by the ignore crate, but be explicit)
     ".git",

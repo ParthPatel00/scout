@@ -1,4 +1,5 @@
 mod cli;
+mod config;
 mod editor;
 mod index;
 mod ml;
@@ -13,24 +14,37 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 
 use crate::cli::OutputFormat;
+use crate::config::Config;
 use crate::search::SearchFilter;
 
 /// Known subcommand names — anything else is treated as a search query.
 const SUBCOMMANDS: &[&str] = &[
     "index", "search", "s", "repos", "report", "rebuild", "optimize",
-    "cleanup", "daemon", "help", "--help", "-h", "--version", "-V",
+    "cleanup", "daemon", "config", "init", "completions",
+    "help", "--help", "-h", "--version", "-V",
 ];
 
 #[derive(Parser)]
 #[command(
     name = "scout",
-    about = "Code search for your codebase.\n\n  scout \"authentication with stripe\"\n  scout index",
+    about = "Semantic code search for your codebase.",
+    long_about = "Scout indexes your code with BM25 + AI embeddings and lets you search\n\
+                  by concept, not just keywords. Works offline, stays fast.\n\
+                  \n\
+                  Quick start:\n\
+                  \n\
+                  \x1b[1m  scout init\x1b[0m                        # one-time setup wizard\n\
+                  \x1b[1m  scout index\x1b[0m                        # index the current repo\n\
+                  \x1b[1m  scout \"authentication logic\"\x1b[0m       # search\n\
+                  \x1b[1m  scout config list\x1b[0m                  # view / change settings",
     version,
-    // Don't show subcommand list in the short help — keep it minimal.
     subcommand_help_heading = "Commands",
+    after_help = "Run \x1b[1mscout init\x1b[0m for interactive first-time setup.\n\
+                  Run \x1b[1mscout config list\x1b[0m to view persistent settings.",
 )]
 struct Cli {
     #[command(subcommand)]
@@ -55,6 +69,12 @@ enum Command {
     },
 
     /// Search the index. Launches TUI in a terminal, plain text when piped.
+    ///
+    /// Examples:
+    ///   scout "stripe payment flow"
+    ///   scout "auth middleware" --lang go --limit 5
+    ///   scout "database connection" --format json | jq '.[0].file_path'
+    ///   scout "retry logic" --semantic
     #[command(alias = "s")]
     Search {
         /// What to search for.
@@ -64,9 +84,9 @@ enum Command {
         #[arg(short, long, default_value = ".")]
         path: PathBuf,
 
-        /// Max results to show.
-        #[arg(short, long, default_value = "10")]
-        limit: usize,
+        /// Max results to show [config: search.limit].
+        #[arg(short, long)]
+        limit: Option<usize>,
 
         /// Filter by language: python, rust, go, java, typescript, javascript, cpp.
         #[arg(long)]
@@ -80,7 +100,7 @@ enum Command {
         #[arg(long)]
         modified_last: Option<u64>,
 
-        /// Exclude test files.
+        /// Exclude test files [config: search.exclude_tests].
         #[arg(long)]
         exclude_tests: bool,
 
@@ -88,16 +108,15 @@ enum Command {
         #[arg(long)]
         show_context: bool,
 
-        /// Output format: plain, json, csv.
+        /// Output format: plain, json, csv [config: search.format].
         #[arg(long, value_enum)]
         format: Option<OutputFormat>,
 
-        /// Plain-text output only, never launch the TUI.
+        /// Plain-text output only, never launch the TUI [config: search.no_tui].
         #[arg(long)]
         no_tui: bool,
 
-        /// Force pure vector-only search (requires model). Default already uses
-        /// the best available method automatically.
+        /// Force pure vector-only search (requires model).
         #[arg(long)]
         semantic: bool,
 
@@ -116,6 +135,40 @@ enum Command {
         /// Find functions similar to the one at FILE:LINE.
         #[arg(long, value_name = "FILE:LINE")]
         find_similar: Option<String>,
+    },
+
+    /// Interactive first-time setup wizard.
+    ///
+    /// Sets preferences, optionally downloads the AI model, and installs shell
+    /// completions. You can re-run this any time to reconfigure.
+    Init,
+
+    /// View and change persistent configuration.
+    ///
+    /// Settings are stored in ~/.config/scout/config.toml and override defaults
+    /// without requiring flags on every command.
+    ///
+    /// Examples:
+    ///   scout config list
+    ///   scout config set search.limit 20
+    ///   scout config set search.no_tui true
+    ///   scout config set editor.command nvim
+    ///   scout config get search.limit
+    Config {
+        #[command(subcommand)]
+        action: ConfigCommand,
+    },
+
+    /// Print shell completion script to stdout.
+    ///
+    /// Examples:
+    ///   scout completions zsh > ~/.zsh/completions/_scout
+    ///   scout completions bash > ~/.bash_completions/scout
+    ///   scout completions fish > ~/.config/fish/completions/scout.fish
+    Completions {
+        /// Shell to generate completions for.
+        #[arg(value_enum)]
+        shell: Shell,
     },
 
     /// Manage registered repositories for cross-repo search.
@@ -155,6 +208,26 @@ enum Command {
         #[command(subcommand)]
         action: DaemonCommand,
     },
+}
+
+#[derive(Subcommand)]
+enum ConfigCommand {
+    /// List all settings with their current values and descriptions.
+    List,
+    /// Get a single setting value.
+    Get {
+        /// Config key (e.g. search.limit).
+        key: String,
+    },
+    /// Set a setting value persistently.
+    Set {
+        /// Config key (e.g. search.limit).
+        key: String,
+        /// New value.
+        value: String,
+    },
+    /// Open the config file in your editor.
+    Edit,
 }
 
 #[derive(Subcommand)]
@@ -236,6 +309,9 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse_from(args);
 
+    // Load persistent config — used to provide defaults for search/index flags.
+    let cfg = Config::load();
+
     match cli.command {
         Command::Index { path, verbose, download_model } => {
             if download_model {
@@ -244,6 +320,7 @@ fn main() -> Result<()> {
             }
             cli::index::run(cli::index::IndexArgs { path, verbose })?;
         }
+
         Command::Search {
             query,
             path,
@@ -261,17 +338,30 @@ fn main() -> Result<()> {
             repos,
             find_similar,
         } => {
+            // Merge CLI flags with config defaults.
+            // Rule: explicit CLI flag > config file > built-in default.
+            let effective_limit = limit.unwrap_or(cfg.search.limit);
+            let effective_no_tui = no_tui || cfg.search.no_tui;
+            let effective_exclude_tests = exclude_tests || cfg.search.exclude_tests;
+            let effective_format = format.or_else(|| {
+                cfg.search.format.as_deref().and_then(|s| match s {
+                    "json" => Some(OutputFormat::Json),
+                    "csv" => Some(OutputFormat::Csv),
+                    _ => None,
+                })
+            });
+
             let modified_since = modified_last
                 .map(|days| chrono::Utc::now().timestamp() - (days as i64 * 86_400));
             let filter = SearchFilter {
                 lang,
                 path_prefix: path_filter,
                 modified_since,
-                exclude_tests,
+                exclude_tests: effective_exclude_tests,
             };
 
-            let use_tui = !no_tui
-                && format.is_none()
+            let use_tui = !effective_no_tui
+                && effective_format.is_none()
                 && !show_context
                 && find_similar.is_none()
                 && !all_repos
@@ -282,17 +372,55 @@ fn main() -> Result<()> {
             cli::search::run(cli::search::SearchArgs {
                 path,
                 query,
-                limit,
+                limit: effective_limit,
                 filter,
                 show_context,
-                format,
+                format: effective_format,
                 use_tui,
                 semantic,
                 all_repos,
                 repos,
                 find_similar,
+                editor_cmd: cfg.editor.command.clone(),
+                auto_index: cfg.index.auto_index,
             })?;
         }
+
+        Command::Init => {
+            cli::init::run()?;
+        }
+
+        Command::Config { action } => match action {
+            ConfigCommand::List => {
+                cli::config_cmd::list()?;
+            }
+            ConfigCommand::Get { key } => {
+                cli::config_cmd::get(cli::config_cmd::GetArgs { key })?;
+            }
+            ConfigCommand::Set { key, value } => {
+                cli::config_cmd::set(cli::config_cmd::SetArgs { key, value })?;
+            }
+            ConfigCommand::Edit => {
+                let path = config::config_path();
+                // Ensure config file exists before opening.
+                if !path.exists() {
+                    Config::default().save()?;
+                }
+                editor::open_with(
+                    &path.to_string_lossy(),
+                    1,
+                    &PathBuf::from("/"),
+                    cfg.editor.command.as_deref(),
+                )?;
+            }
+        },
+
+        Command::Completions { shell } => {
+            let mut cmd = Cli::command();
+            let name = cmd.get_name().to_string();
+            clap_complete::generate(shell, &mut cmd, name, &mut std::io::stdout());
+        }
+
         Command::Repos { action } => match action {
             ReposCommand::Add { name, path } => {
                 cli::repos::add(cli::repos::AddArgs { name, path })?;
@@ -304,6 +432,7 @@ fn main() -> Result<()> {
                 cli::repos::remove(cli::repos::RemoveArgs { name })?;
             }
         },
+
         Command::Report { kind } => match kind {
             ReportCommand::UnusedFunctions { path } => {
                 cli::report::run(cli::report::ReportArgs {
@@ -312,6 +441,7 @@ fn main() -> Result<()> {
                 })?;
             }
         },
+
         Command::Rebuild { path, verbose } => {
             cli::maintenance::rebuild(cli::maintenance::RebuildArgs { path, verbose })?;
         }

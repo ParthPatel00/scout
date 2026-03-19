@@ -28,6 +28,10 @@ pub struct SearchArgs {
     pub repos: Option<String>,
     /// Find functions similar to the one at FILE:LINE.
     pub find_similar: Option<String>,
+    /// Editor command override from config (passed through to TUI/open).
+    pub editor_cmd: Option<String>,
+    /// Auto-index from config: index if no index found.
+    pub auto_index: bool,
 }
 
 pub fn run(args: SearchArgs) -> Result<()> {
@@ -48,10 +52,14 @@ pub fn run(args: SearchArgs) -> Result<()> {
     let vector_path = idx_dir.join("vectors.bin");
 
     if !tantivy_dir.join("meta.json").exists() {
-        bail!(
-            "No index found at {}. Run `scout index` first.",
-            root.display()
-        );
+        if auto_index(&root, args.auto_index)? {
+            // Re-resolve paths after indexing.
+        } else {
+            bail!(
+                "No index found at {}. Run `scout index` first.",
+                root.display()
+            );
+        }
     }
 
     // Always try to load the embedding model silently.
@@ -120,7 +128,7 @@ pub fn run(args: SearchArgs) -> Result<()> {
 
     // Launch TUI when in a terminal with no format override.
     if args.use_tui {
-        return crate::tui::run(args.query, results, root);
+        return crate::tui::run(args.query, results, root, args.editor_cmd.clone());
     }
 
     match args.format {
@@ -190,7 +198,7 @@ fn run_cross_repo(args: &SearchArgs) -> Result<()> {
         _ => {
             for (repo, r) in hits.iter() {
                 println!(
-                    "\x1b[2m[{repo}]\x1b[0m \x1b[2m{file}:{line}\x1b[0m  \x1b[1m{name}\x1b[0m  \x1b[2m{unit_type} · {lang}\x1b[0m",
+                    "\x1b[35m[{repo}]\x1b[0m \x1b[36m{file}\x1b[0m\x1b[2m:{line}\x1b[0m  \x1b[1;33m{name}\x1b[0m  \x1b[32m{unit_type}\x1b[0m\x1b[2m · {lang}\x1b[0m",
                     file = r.unit.file_path,
                     line = r.unit.line_start,
                     name = r.unit.name,
@@ -224,7 +232,7 @@ fn run_find_similar(args: &SearchArgs, loc: &str) -> Result<()> {
             format!("\x1b[2m[{repo}]\x1b[0m ")
         };
         println!(
-            "{repo_prefix}\x1b[2m{file}:{line}\x1b[0m  \x1b[1m{name}\x1b[0m  \x1b[2m{unit_type} · {lang}\x1b[0m",
+            "{repo_prefix}\x1b[36m{file}\x1b[0m\x1b[2m:{line}\x1b[0m  \x1b[1;33m{name}\x1b[0m  \x1b[32m{unit_type}\x1b[0m\x1b[2m · {lang}\x1b[0m",
             file = r.unit.file_path,
             line = r.unit.line_start,
             name = r.unit.name,
@@ -275,9 +283,9 @@ fn output_plain(
             .map(|r| format!("\x1b[2m[{r}]\x1b[0m "))
             .unwrap_or_default();
 
-        // Location in dim, name in bold
+        // File path in cyan, line dim, name bold yellow, type green, lang dim
         println!(
-            "{repo_prefix}\x1b[2m{file}:{line}\x1b[0m  \x1b[1m{name}\x1b[0m  \x1b[2m{unit_type} · {lang}\x1b[0m",
+            "{repo_prefix}\x1b[36m{file}\x1b[0m\x1b[2m:{line}\x1b[0m  \x1b[1;33m{name}\x1b[0m  \x1b[32m{unit_type}\x1b[0m\x1b[2m · {lang}\x1b[0m",
             file = unit.file_path,
             line = unit.line_start,
             name = unit.name,
@@ -396,5 +404,50 @@ fn lang_ext(lang: &str) -> &str {
         "java" => "java",
         "cpp" => "cpp",
         _ => "txt",
+    }
+}
+
+// ─── Auto-index ───────────────────────────────────────────────────────────────
+
+/// When no index is found, either auto-index (if configured) or prompt the user.
+/// Returns true if indexing ran and the caller should proceed, false if the
+/// caller should emit the "run scout index" error.
+fn auto_index(root: &std::path::Path, configured: bool) -> Result<bool> {
+    use std::io::IsTerminal;
+
+    let is_tty = std::io::stderr().is_terminal();
+
+    if configured {
+        // Config says auto-index: go ahead silently (progress bar shows inside indexer).
+        eprintln!("No index found. Indexing {} …", root.display());
+        crate::cli::index::run(crate::cli::index::IndexArgs {
+            path: root.to_path_buf(),
+            verbose: false,
+        })?;
+        return Ok(true);
+    }
+
+    if !is_tty {
+        // Non-interactive (piped) — can't prompt, just fail.
+        return Ok(false);
+    }
+
+    // Interactive terminal: ask the user.
+    eprint!(
+        "No index found at {}. Index it now? [Y/n] ",
+        root.display()
+    );
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    let answer = answer.trim().to_ascii_lowercase();
+
+    if answer.is_empty() || answer == "y" || answer == "yes" {
+        crate::cli::index::run(crate::cli::index::IndexArgs {
+            path: root.to_path_buf(),
+            verbose: false,
+        })?;
+        Ok(true)
+    } else {
+        Ok(false)
     }
 }

@@ -154,7 +154,7 @@ pub struct CallEdge {
     pub line_number: usize,
 }
 
-/// Index metadata stored in `.codesearch/metadata.json`.
+/// Index metadata stored in `.scout/metadata.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexMetadata {
     pub version: u32,
