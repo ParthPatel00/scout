@@ -82,9 +82,9 @@ pub fn detect_name() -> Option<String> {
         }
     }
     #[cfg(windows)]
-    let candidates = &["nvim", "code.cmd", "code", "notepad"][..];
+    let candidates = &["code.cmd", "code", "nvim", "notepad"][..];
     #[cfg(not(windows))]
-    let candidates = &["nvim", "vim", "hx", "nano", "emacs", "code", "zed"][..];
+    let candidates = &["code", "cursor", "zed", "nvim", "vim", "hx", "nano", "emacs"][..];
     for cmd in candidates {
         if cmd_in_path(cmd) {
             return Some(cmd.to_string());
@@ -114,12 +114,13 @@ fn detect() -> Editor {
         }
     }
 
-    // Auto-detect: prefer terminal editors so the user stays in their workflow.
+    // Auto-detect: prefer VS Code / GUI editors first so results open in the
+    // editor the user is most likely already working in.
     // On Windows, VS Code registers as `code.cmd`; check that too.
     #[cfg(windows)]
-    let candidates = &["nvim", "code.cmd", "code", "notepad"][..];
+    let candidates = &["code.cmd", "code", "nvim", "notepad"][..];
     #[cfg(not(windows))]
-    let candidates = &["nvim", "vim", "hx", "nano", "emacs", "code", "zed"][..];
+    let candidates = &["code", "cursor", "zed", "nvim", "vim", "hx", "nano", "emacs"][..];
 
     for cmd in candidates {
         if cmd_in_path(cmd) {

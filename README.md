@@ -267,7 +267,16 @@ scout "your query"       # search
 
 ## Configuration
 
-All preferences live in `~/.config/scout/config.toml`. Use `scout init` to set them interactively, or change individual values any time:
+All preferences live in Scout's config file. Use `scout init` to set them interactively, or change individual values any time:
+
+```bash
+scout config list   # shows the exact path on your system
+```
+
+Config file locations by platform:
+- **macOS:** `~/Library/Application Support/scout/config.toml`
+- **Linux:** `~/.config/scout/config.toml`
+- **Windows:** `%APPDATA%\scout\config.toml`
 
 ```bash
 scout config list                           # view all settings + current values
@@ -509,7 +518,7 @@ $ scout "authentication" --all-repos --no-tui
 Find functions structurally similar to one you already know — useful for spotting copy-paste debt:
 
 ```bash
-scout --find-similar services/auth/service.py:110
+scout search --find-similar services/auth/service.py:110
 ```
 
 ---

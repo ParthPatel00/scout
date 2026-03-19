@@ -77,8 +77,9 @@ enum Command {
     ///   scout "retry logic" --semantic
     #[command(alias = "s")]
     Search {
-        /// What to search for.
-        query: String,
+        /// What to search for (optional when --find-similar is used).
+        #[arg(required_unless_present = "find_similar")]
+        query: Option<String>,
 
         /// Repository root to search [default: current directory].
         #[arg(short, long, default_value = ".")]
@@ -340,6 +341,7 @@ fn main() -> Result<()> {
         } => {
             // Merge CLI flags with config defaults.
             // Rule: explicit CLI flag > config file > built-in default.
+            let query = query.unwrap_or_default();
             let effective_limit = limit.unwrap_or(cfg.search.limit);
             let effective_no_tui = no_tui || cfg.search.no_tui;
             let effective_exclude_tests = exclude_tests || cfg.search.exclude_tests;

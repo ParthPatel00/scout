@@ -99,7 +99,7 @@ pub fn run() -> Result<()> {
     let editor_idx = Select::with_theme(&theme)
         .with_prompt("Editor for opening results")
         .items(&editor_items)
-        .default(0)
+        .default(1) // VS Code as default
         .interact()?;
 
     cfg.editor.command = match editor_idx {
