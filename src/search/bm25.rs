@@ -1,14 +1,32 @@
 use anyhow::Result;
 use std::path::Path;
 
+use crate::search::SearchFilter;
 use crate::storage::tantivy_store::{self, Hit};
 use crate::types::SearchResult;
 
-/// Run a BM25 search against the Tantivy index at `tantivy_dir`.
-pub fn search(tantivy_dir: &Path, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
+/// Run a BM25 search against the Tantivy index at `tantivy_dir`, applying
+/// optional filters. Fetches up to `limit * 5` candidates then filters.
+pub fn search(
+    tantivy_dir: &Path,
+    query: &str,
+    limit: usize,
+    filter: &SearchFilter,
+) -> Result<Vec<SearchResult>> {
     let (index, schema) = tantivy_store::open_index(tantivy_dir)?;
-    let hits = tantivy_store::search(&index, &schema, query, limit)?;
-    Ok(hits.into_iter().map(hit_to_result).collect())
+
+    // Fetch extra candidates so filters don't leave us short.
+    let fetch = if filter.is_empty() { limit } else { limit * 5 };
+    let hits = tantivy_store::search(&index, &schema, query, fetch)?;
+
+    let results: Vec<SearchResult> = hits
+        .into_iter()
+        .filter(|h| filter.matches_lang(&h.language) && filter.matches_path(&h.file_path))
+        .take(limit)
+        .map(hit_to_result)
+        .collect();
+
+    Ok(results)
 }
 
 fn lang_from_name(s: &str) -> crate::types::Language {
@@ -32,7 +50,6 @@ fn hit_to_result(hit: Hit) -> SearchResult {
         .unwrap_or(&hit.name)
         .to_string();
 
-    // Build a minimal CodeUnit for display purposes.
     let unit = crate::types::CodeUnit {
         id: hit.sqlite_id,
         file_path: hit.file_path,

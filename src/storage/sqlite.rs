@@ -227,6 +227,62 @@ fn row_to_unit(row: &rusqlite::Row<'_>) -> rusqlite::Result<CodeUnit> {
     })
 }
 
+/// Return the names + locations of all units that call `callee_name`.
+pub fn callers_of(conn: &Connection, callee_name: &str) -> Result<Vec<(String, String, usize)>> {
+    let mut stmt = conn.prepare(
+        "SELECT cu.name, cu.file_path, cu.line_start
+         FROM call_graph cg
+         JOIN code_units cu ON cg.caller_id = cu.id
+         WHERE cg.callee_name = ?1
+         LIMIT 10",
+    )?;
+    let rows = stmt
+        .query_map(params![callee_name], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)? as usize))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+/// Return the names + locations of callees of the unit with the given id.
+pub fn callees_of(conn: &Connection, caller_id: i64) -> Result<Vec<(String, String, usize)>> {
+    let mut stmt = conn.prepare(
+        "SELECT cu.name, cu.file_path, cu.line_start
+         FROM call_graph cg
+         JOIN code_units cu ON cu.name = cg.callee_name
+         WHERE cg.caller_id = ?1
+         LIMIT 10",
+    )?;
+    let rows = stmt
+        .query_map(params![caller_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)? as usize))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+/// Return functions/methods that are never called by anyone in the index.
+pub fn unused_functions(conn: &Connection) -> Result<Vec<(String, String, usize, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT cu.name, cu.file_path, cu.line_start, cu.unit_type
+         FROM code_units cu
+         WHERE (cu.unit_type = 'function' OR cu.unit_type = 'method')
+           AND cu.name NOT IN (SELECT callee_name FROM call_graph)
+         ORDER BY cu.file_path, cu.line_start",
+    )?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)? as usize,
+                row.get::<_, String>(3)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 /// Count total code units.
 pub fn count_units(conn: &Connection) -> Result<usize> {
     let n: i64 = conn.query_row("SELECT COUNT(*) FROM code_units", [], |r| r.get(0))?;

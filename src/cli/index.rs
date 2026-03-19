@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 
 use crate::index::{self, walker};
 use crate::storage::{sqlite, tantivy_store};
-use crate::types::{FileRecord, Language};
+use crate::types::{CallEdge, FileRecord, Language};
 
 pub struct IndexArgs {
     pub path: PathBuf,
@@ -85,6 +85,18 @@ pub fn run(args: IndexArgs) -> Result<()> {
             let id = sqlite::insert_unit(&conn, &unit)?;
             unit.id = id;
             inserted_units.push(unit);
+        }
+
+        // Insert call graph edges for each unit.
+        for unit in &inserted_units {
+            for callee_name in &unit.calls {
+                let edge = CallEdge {
+                    caller_id: unit.id,
+                    callee_name: callee_name.clone(),
+                    line_number: unit.line_start,
+                };
+                sqlite::insert_call_edge(&conn, &edge)?;
+            }
         }
 
         // Update Tantivy BM25 index.

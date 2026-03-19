@@ -45,6 +45,7 @@ sha2 = "0.10"
 hex = "0.4"
 rayon = "1.8"
 chrono = { version = "0.4", features = ["serde"] }
+strsim = "0.11"
 
 # TUI (Phase 4)
 ratatui = { version = "0.26", optional = true }

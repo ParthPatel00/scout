@@ -66,6 +66,24 @@ fn node_text<'a>(node: Node, source: &'a str) -> &'a str {
     node.utf8_text(source.as_bytes()).unwrap_or("")
 }
 
+/// Walk a subtree and collect all call sites into `out`, deduped.
+fn collect_calls_recursive<F>(node: Node, source: &str, out: &mut Vec<String>, visit: &F)
+where
+    F: Fn(Node, &str, &mut Vec<String>),
+{
+    visit(node, source, out);
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_calls_recursive(child, source, out, visit);
+    }
+}
+
+fn dedup(mut v: Vec<String>) -> Vec<String> {
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
 /// Extract the first named child with the given kind.
 fn child_of_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<'a>> {
     let mut cursor = node.walk();
@@ -113,6 +131,7 @@ fn extract_python_node(file_path: &str, source: &str, node: Node, units: &mut Ve
                     );
                     unit.full_signature = Some(extract_python_signature(child, source));
                     unit.docstring = extract_python_docstring(child, source);
+                    unit.calls = dedup(python_calls(child, source));
                     units.push(unit);
                     // Recurse into nested functions/classes
                     extract_python_node(file_path, source, child, units);
@@ -137,6 +156,30 @@ fn extract_python_node(file_path: &str, source: &str, node: Node, units: &mut Ve
             _ => extract_python_node(file_path, source, child, units),
         }
     }
+}
+
+fn python_calls(node: Node, source: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_calls_recursive(node, source, &mut out, &|n, src, calls| {
+        if n.kind() == "call" {
+            if let Some(func) = n.named_child(0) {
+                match func.kind() {
+                    "identifier" => calls.push(node_text(func, src).to_string()),
+                    "attribute" => {
+                        // obj.method() — last named child is the attribute identifier
+                        let mut c = func.walk();
+                        if let Some(attr) = func.named_children(&mut c).last() {
+                            if attr.kind() == "identifier" {
+                                calls.push(node_text(attr, src).to_string());
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    });
+    out
 }
 
 fn extract_python_signature(node: Node, source: &str) -> String {
@@ -202,8 +245,8 @@ fn extract_rust_node(file_path: &str, source: &str, node: Node, units: &mut Vec<
                         child,
                         source,
                     );
-                    unit.full_signature =
-                        Some(extract_rust_signature(child, source));
+                    unit.full_signature = Some(extract_rust_signature(child, source));
+                    unit.calls = dedup(rust_calls(child, source));
                     units.push(unit);
                 }
             }
@@ -268,6 +311,36 @@ fn extract_rust_signature(node: Node, source: &str) -> String {
     }
 }
 
+fn rust_calls(node: Node, source: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_calls_recursive(node, source, &mut out, &|n, src, calls| {
+        match n.kind() {
+            "call_expression" => {
+                // foo() or foo::bar()
+                if let Some(func) = n.named_child(0) {
+                    if func.kind() == "identifier" {
+                        calls.push(node_text(func, src).to_string());
+                    } else if func.kind() == "scoped_identifier" {
+                        // last segment of a::b::c
+                        let mut c = func.walk();
+                        if let Some(last) = func.named_children(&mut c).last() {
+                            calls.push(node_text(last, src).to_string());
+                        }
+                    }
+                }
+            }
+            "method_call_expression" => {
+                // obj.method(...)
+                if let Some(m) = child_of_kind(n, "field_identifier") {
+                    calls.push(node_text(m, src).to_string());
+                }
+            }
+            _ => {}
+        }
+    });
+    out
+}
+
 // ─── JavaScript / TypeScript ──────────────────────────────────────────────────
 
 fn extract_js_ts(
@@ -294,7 +367,7 @@ fn extract_js_ts_node(
             "function_declaration" | "function" | "generator_function_declaration" => {
                 if let Some(name_node) = child_of_kind(child, "identifier") {
                     let name = node_text(name_node, source).to_string();
-                    let unit = make_unit(
+                    let mut unit = make_unit(
                         file_path,
                         language.clone(),
                         UnitType::Function,
@@ -302,6 +375,7 @@ fn extract_js_ts_node(
                         child,
                         source,
                     );
+                    unit.calls = dedup(js_calls(child, source));
                     units.push(unit);
                 }
             }
@@ -310,7 +384,7 @@ fn extract_js_ts_node(
                     .or_else(|| child_of_kind(child, "private_property_identifier"))
                 {
                     let name = node_text(name_node, source).to_string();
-                    let unit = make_unit(
+                    let mut unit = make_unit(
                         file_path,
                         language.clone(),
                         UnitType::Method,
@@ -318,6 +392,7 @@ fn extract_js_ts_node(
                         child,
                         source,
                     );
+                    unit.calls = dedup(js_calls(child, source));
                     units.push(unit);
                 }
             }
@@ -349,7 +424,7 @@ fn extract_js_ts_node(
                 if has_arrow {
                     if let Some(name_node) = child_of_kind(child, "identifier") {
                         let name = node_text(name_node, source).to_string();
-                        let unit = make_unit(
+                        let mut unit = make_unit(
                             file_path,
                             language.clone(),
                             UnitType::Function,
@@ -357,6 +432,7 @@ fn extract_js_ts_node(
                             child,
                             source,
                         );
+                        unit.calls = dedup(js_calls(child, source));
                         units.push(unit);
                     }
                 }
@@ -364,6 +440,26 @@ fn extract_js_ts_node(
             _ => extract_js_ts_node(file_path, source, child, language, units),
         }
     }
+}
+
+fn js_calls(node: Node, source: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_calls_recursive(node, source, &mut out, &|n, src, calls| {
+        if n.kind() == "call_expression" {
+            if let Some(func) = n.named_child(0) {
+                match func.kind() {
+                    "identifier" => calls.push(node_text(func, src).to_string()),
+                    "member_expression" => {
+                        if let Some(prop) = child_of_kind(func, "property_identifier") {
+                            calls.push(node_text(prop, src).to_string());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    });
+    out
 }
 
 // ─── Go ───────────────────────────────────────────────────────────────────────
@@ -376,7 +472,7 @@ fn extract_go(file_path: &str, source: &str, root: Node) -> Vec<CodeUnit> {
             "function_declaration" => {
                 if let Some(name_node) = child_of_kind(child, "identifier") {
                     let name = node_text(name_node, source).to_string();
-                    let unit = make_unit(
+                    let mut unit = make_unit(
                         file_path,
                         Language::Go,
                         UnitType::Function,
@@ -384,13 +480,14 @@ fn extract_go(file_path: &str, source: &str, root: Node) -> Vec<CodeUnit> {
                         child,
                         source,
                     );
+                    unit.calls = dedup(go_calls(child, source));
                     units.push(unit);
                 }
             }
             "method_declaration" => {
                 if let Some(name_node) = child_of_kind(child, "field_identifier") {
                     let name = node_text(name_node, source).to_string();
-                    let unit = make_unit(
+                    let mut unit = make_unit(
                         file_path,
                         Language::Go,
                         UnitType::Method,
@@ -398,6 +495,7 @@ fn extract_go(file_path: &str, source: &str, root: Node) -> Vec<CodeUnit> {
                         child,
                         source,
                     );
+                    unit.calls = dedup(go_calls(child, source));
                     units.push(unit);
                 }
             }
@@ -440,6 +538,26 @@ fn extract_go(file_path: &str, source: &str, root: Node) -> Vec<CodeUnit> {
     units
 }
 
+fn go_calls(node: Node, source: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_calls_recursive(node, source, &mut out, &|n, src, calls| {
+        if n.kind() == "call_expression" {
+            if let Some(func) = n.named_child(0) {
+                match func.kind() {
+                    "identifier" => calls.push(node_text(func, src).to_string()),
+                    "selector_expression" => {
+                        if let Some(field) = child_of_kind(func, "field_identifier") {
+                            calls.push(node_text(field, src).to_string());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    });
+    out
+}
+
 // ─── Java ─────────────────────────────────────────────────────────────────────
 
 fn extract_java(file_path: &str, source: &str, root: Node) -> Vec<CodeUnit> {
@@ -475,7 +593,7 @@ fn extract_java_node(file_path: &str, source: &str, node: Node, units: &mut Vec<
             "method_declaration" | "constructor_declaration" => {
                 if let Some(name_node) = child_of_kind(child, "identifier") {
                     let name = node_text(name_node, source).to_string();
-                    let unit = make_unit(
+                    let mut unit = make_unit(
                         file_path,
                         Language::Java,
                         UnitType::Method,
@@ -483,12 +601,25 @@ fn extract_java_node(file_path: &str, source: &str, node: Node, units: &mut Vec<
                         child,
                         source,
                     );
+                    unit.calls = dedup(java_calls(child, source));
                     units.push(unit);
                 }
             }
             _ => extract_java_node(file_path, source, child, units),
         }
     }
+}
+
+fn java_calls(node: Node, source: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_calls_recursive(node, source, &mut out, &|n, src, calls| {
+        if n.kind() == "method_invocation" {
+            if let Some(name_node) = child_of_kind(n, "identifier") {
+                calls.push(node_text(name_node, src).to_string());
+            }
+        }
+    });
+    out
 }
 
 // ─── C++ ─────────────────────────────────────────────────────────────────────
