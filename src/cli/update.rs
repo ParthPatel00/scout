@@ -126,19 +126,30 @@ fn extract_zip(bytes: &[u8]) -> Result<Vec<u8>> {
 
 fn install(binary: Vec<u8>) -> Result<()> {
     let exe = std::env::current_exe().context("could not determine current executable path")?;
-    let tmp = exe.with_extension("update-tmp");
 
-    std::fs::write(&tmp, &binary).context("failed to write temporary binary")?;
+    // Stage the new binary in the system temp dir so we can always write it,
+    // even when the directory containing the current binary is read-only.
+    let tmp = std::env::temp_dir().join("scout.update-tmp");
+
+    std::fs::write(&tmp, &binary).context("failed to write temporary binary to temp dir")?;
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))
+            .context("failed to set permissions on temporary binary")?;
     }
 
-    std::fs::rename(&tmp, &exe).context(
-        "failed to replace binary — try running with sudo or move the binary to a writable location",
-    )?;
+    // Try atomic rename first (works when tmp and exe are on the same filesystem).
+    // Fall back to copy+delete when they are on different filesystems (cross-device).
+    let replace_err = std::fs::rename(&tmp, &exe).err();
+    if replace_err.is_some() {
+        std::fs::copy(&tmp, &exe).with_context(|| format!(
+            "failed to replace binary at {} — try running with sudo or move scout to a writable location",
+            exe.display()
+        ))?;
+        let _ = std::fs::remove_file(&tmp);
+    }
 
     Ok(())
 }
