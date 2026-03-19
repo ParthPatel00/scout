@@ -62,7 +62,7 @@ pub fn start(args: StartArgs) -> Result<()> {
     if let Some(state) = read_state(&idx_dir) {
         if is_running(state.pid) {
             bail!(
-                "Daemon is already running (PID {}). Use `codesearch daemon stop` first.",
+                "Daemon is already running (PID {}). Use `scout daemon stop` first.",
                 state.pid
             );
         }
@@ -73,23 +73,36 @@ pub fn start(args: StartArgs) -> Result<()> {
     // Ensure there's an index to watch.
     if !index::db_path(&idx_dir).exists() {
         bail!(
-            "No index found at {}. Run `codesearch index` first.",
+            "No index found at {}. Run `scout index` first.",
             root.display()
         );
     }
 
-    // Spawn the daemon process (re-invokes this binary with the hidden `--daemon-run` flag).
+    // Spawn the daemon process (re-invokes this binary with the hidden `daemon run` subcommand).
+    // On Unix, call setsid() in the child before exec so it detaches from the controlling
+    // terminal and survives after the parent (and the user's shell session) exits.
     let exe = std::env::current_exe().context("failed to find current executable")?;
-    let child = std::process::Command::new(&exe)
-        .arg("daemon")
+    let mut cmd = std::process::Command::new(&exe);
+    cmd.arg("daemon")
         .arg("run")
         .arg("--path")
         .arg(&root)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .context("failed to spawn daemon process")?;
+        .stderr(std::process::Stdio::null());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
+        }
+    }
+
+    let child = cmd.spawn().context("failed to spawn daemon process")?;
 
     let pid = child.id();
     let state = DaemonState {
@@ -197,17 +210,17 @@ pub fn install_hooks(args: InstallHooksArgs) -> Result<()> {
     for hook in &["post-commit", "post-merge", "post-checkout"] {
         let hook_path = hooks_dir.join(hook);
         let script = format!(
-            "#!/bin/sh\n# Added by codesearch\n\"{exe_str}\" update --path \"{root}\" &\n",
+            "#!/bin/sh\n# Added by scout\n\"{exe_str}\" update --path \"{root}\" &\n",
             root = root.display()
         );
 
         // Append to existing hook or create new.
         if hook_path.exists() {
             let existing = std::fs::read_to_string(&hook_path)?;
-            if !existing.contains("codesearch") {
+            if !existing.contains("scout") {
                 let mut content = existing;
                 content.push_str(&format!(
-                    "\n# codesearch incremental update\n\"{exe_str}\" update --path \"{root}\" &\n",
+                    "\n# scout incremental update\n\"{exe_str}\" update --path \"{root}\" &\n",
                     root = root.display()
                 ));
                 std::fs::write(&hook_path, content)?;
@@ -244,7 +257,7 @@ pub fn update(args: UpdateArgs) -> Result<()> {
 
     if !db_path.exists() {
         bail!(
-            "No index found at {}. Run `codesearch index` first.",
+            "No index found at {}. Run `scout index` first.",
             root.display()
         );
     }

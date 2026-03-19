@@ -17,11 +17,19 @@ use clap::{Parser, Subcommand};
 use crate::cli::OutputFormat;
 use crate::search::SearchFilter;
 
+/// Known subcommand names — anything else is treated as a search query.
+const SUBCOMMANDS: &[&str] = &[
+    "index", "search", "s", "repos", "report", "rebuild", "optimize",
+    "cleanup", "daemon", "help", "--help", "-h", "--version", "-V",
+];
+
 #[derive(Parser)]
 #[command(
-    name = "codesearch",
-    about = "Semantic code search for your codebase",
-    version
+    name = "scout",
+    about = "Code search for your codebase.\n\n  scout \"authentication with stripe\"\n  scout index",
+    version,
+    // Don't show subcommand list in the short help — keep it minimal.
+    subcommand_help_heading = "Commands",
 )]
 struct Cli {
     #[command(subcommand)]
@@ -30,9 +38,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Build or update the search index for the current repository.
+    /// Build or update the search index.
     Index {
-        /// Root directory to index (defaults to current directory).
+        /// Directory to index [default: current directory].
         #[arg(default_value = ".")]
         path: PathBuf,
 
@@ -40,38 +48,38 @@ enum Command {
         #[arg(short, long)]
         verbose: bool,
 
-        /// Print instructions for downloading the UniXcoder embedding model.
+        /// Print instructions for downloading the AI embedding model.
         #[arg(long)]
         download_model: bool,
     },
 
-    /// Search the index (BM25 + RRF re-ranking). Launches TUI when in a terminal.
+    /// Search the index. Launches TUI in a terminal, plain text when piped.
     #[command(alias = "s")]
     Search {
-        /// The search query.
+        /// What to search for.
         query: String,
 
-        /// Root directory of the repository to search.
+        /// Repository root to search [default: current directory].
         #[arg(short, long, default_value = ".")]
         path: PathBuf,
 
-        /// Maximum number of results to display.
+        /// Max results to show.
         #[arg(short, long, default_value = "10")]
         limit: usize,
 
-        /// Filter by language (e.g. python, rust, go, java, typescript).
+        /// Filter by language: python, rust, go, java, typescript, javascript, cpp.
         #[arg(long)]
         lang: Option<String>,
 
-        /// Filter to files whose path contains this string.
+        /// Only show results from files whose path contains this string.
         #[arg(long)]
         path_filter: Option<String>,
 
-        /// Only show results from files indexed in the last N days (e.g. 7).
+        /// Only show results from files indexed in the last N days.
         #[arg(long)]
         modified_last: Option<u64>,
 
-        /// Exclude test files from results.
+        /// Exclude test files.
         #[arg(long)]
         exclude_tests: bool,
 
@@ -79,19 +87,19 @@ enum Command {
         #[arg(long)]
         show_context: bool,
 
-        /// Output format (plain, json, csv). Defaults to plain when piped, TUI when in a terminal.
+        /// Output format: plain, json, csv.
         #[arg(long, value_enum)]
         format: Option<OutputFormat>,
 
-        /// Always use plain-text output, never launch the TUI.
+        /// Plain-text output only, never launch the TUI.
         #[arg(long)]
         no_tui: bool,
 
-        /// Use semantic (vector embedding) search only.
+        /// Semantic (vector embedding) search — requires model download.
         #[arg(long)]
         semantic: bool,
 
-        /// Hybrid mode: BM25 + vector + name-match (highest quality, requires model).
+        /// Hybrid mode: BM25 + semantic + name-match (best quality, requires model).
         #[arg(long)]
         best: bool,
 
@@ -99,11 +107,11 @@ enum Command {
         #[arg(long)]
         all_repos: bool,
 
-        /// Search specific registered repos (comma-separated names, e.g. backend,frontend).
+        /// Search specific registered repos (comma-separated, e.g. backend,frontend).
         #[arg(long)]
         repos: Option<String>,
 
-        /// Find functions similar to the one at FILE:LINE (e.g. src/auth.py:42).
+        /// Find functions similar to the one at FILE:LINE.
         #[arg(long, value_name = "FILE:LINE")]
         find_similar: Option<String>,
     },
@@ -114,17 +122,13 @@ enum Command {
         action: ReposCommand,
     },
 
-    /// Generate reports about the codebase.
+    /// Generate codebase reports.
     Report {
-        /// Root directory of the repository.
-        #[arg(short, long, default_value = ".")]
-        path: PathBuf,
-
         #[command(subcommand)]
         kind: ReportCommand,
     },
 
-    /// Wipe the index and regenerate it from scratch.
+    /// Wipe the index and regenerate from scratch.
     Rebuild {
         #[arg(short, long, default_value = ".")]
         path: PathBuf,
@@ -132,13 +136,13 @@ enum Command {
         verbose: bool,
     },
 
-    /// Compact the database, refresh statistics, and remove orphaned data.
+    /// Compact the database and remove orphaned data.
     Optimize {
         #[arg(short, long, default_value = ".")]
         path: PathBuf,
     },
 
-    /// Remove index entries for files that have been deleted from disk.
+    /// Remove index entries for files deleted from disk.
     Cleanup {
         #[arg(short, long, default_value = ".")]
         path: PathBuf,
@@ -163,12 +167,11 @@ enum DaemonCommand {
         #[arg(short, long, default_value = ".")]
         path: PathBuf,
     },
-    /// Show daemon status (PID, uptime, last update).
+    /// Show daemon status.
     Status {
         #[arg(short, long, default_value = ".")]
         path: PathBuf,
     },
-    /// (Internal) Run the daemon event loop in the foreground.
     #[command(hide = true)]
     Run {
         #[arg(short, long)]
@@ -188,8 +191,11 @@ enum DaemonCommand {
 
 #[derive(Subcommand)]
 enum ReportCommand {
-    /// List functions and methods that have no callers in the index.
-    UnusedFunctions,
+    /// List functions with no callers in the index.
+    UnusedFunctions {
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -212,7 +218,21 @@ enum ReposCommand {
 }
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    // Allow `scout "query"` as a shorthand for `scout search "query"`.
+    // If the first argument is not a known subcommand or flag, inject "search".
+    let raw: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = if raw.len() >= 2
+        && !SUBCOMMANDS.contains(&raw[1].as_str())
+        && !raw[1].starts_with('-')
+    {
+        let mut a = vec![raw[0].clone(), "search".to_string()];
+        a.extend_from_slice(&raw[1..]);
+        a
+    } else {
+        raw
+    };
+
+    let cli = Cli::parse_from(args);
 
     match cli.command {
         Command::Index { path, verbose, download_model } => {
@@ -282,12 +302,14 @@ fn main() -> Result<()> {
                 cli::repos::remove(cli::repos::RemoveArgs { name })?;
             }
         },
-        Command::Report { path, kind } => {
-            let report_kind = match kind {
-                ReportCommand::UnusedFunctions => cli::report::ReportKind::UnusedFunctions,
-            };
-            cli::report::run(cli::report::ReportArgs { path, kind: report_kind })?;
-        }
+        Command::Report { kind } => match kind {
+            ReportCommand::UnusedFunctions { path } => {
+                cli::report::run(cli::report::ReportArgs {
+                    path,
+                    kind: cli::report::ReportKind::UnusedFunctions,
+                })?;
+            }
+        },
         Command::Rebuild { path, verbose } => {
             cli::maintenance::rebuild(cli::maintenance::RebuildArgs { path, verbose })?;
         }

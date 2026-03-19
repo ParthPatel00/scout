@@ -19,7 +19,7 @@ pub fn run(root: PathBuf) -> Result<()> {
     let (tx, rx) = mpsc::channel::<WatchEvent>();
 
     let strategy = start_best_watcher(&root, tx);
-    eprintln!("codesearch daemon: watching {} [strategy: {}]", root.display(), strategy);
+    eprintln!("scout daemon: watching {} [strategy: {}]", root.display(), strategy);
 
     process_events(&root, rx)
 }

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 pub const EMBEDDING_DIM: usize = 768;
 pub const MODEL_ID: &str = "microsoft/unixcoder-base";
@@ -11,7 +11,7 @@ pub fn models_dir() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".config").join("codesearch").join("models")
+    PathBuf::from(home).join(".config").join("scout").join("models")
 }
 
 pub fn model_dir() -> PathBuf {
@@ -47,7 +47,7 @@ pub fn load_model() -> Result<Box<dyn super::EmbeddingModel>> {
     let path = model_dir();
     if !path.join("config.json").exists() {
         anyhow::bail!(
-            "Model not found at {}.\nRun: codesearch index --download-model",
+            "Model not found at {}.\nRun: scout index --download-model",
             path.display()
         );
     }

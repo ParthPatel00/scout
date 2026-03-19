@@ -96,7 +96,7 @@ pub fn find_similar(
     if !vector_path.exists() {
         anyhow::bail!(
             "No vector store found for this repo. \
-             Run `codesearch index --download-model` and generate embeddings first."
+             Run `scout index --download-model` and generate embeddings first."
         );
     }
     let mut store = VectorStore::load(&vector_path)?;

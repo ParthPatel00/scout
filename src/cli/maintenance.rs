@@ -47,7 +47,7 @@ pub fn optimize(args: OptimizeArgs) -> Result<()> {
 
     if !db_path.exists() {
         bail!(
-            "No index found at {}. Run `codesearch index` first.",
+            "No index found at {}. Run `scout index` first.",
             root.display()
         );
     }
@@ -100,7 +100,7 @@ pub fn cleanup(args: CleanupArgs) -> Result<()> {
 
     if !db_path.exists() {
         bail!(
-            "No index found at {}. Run `codesearch index` first.",
+            "No index found at {}. Run `scout index` first.",
             root.display()
         );
     }

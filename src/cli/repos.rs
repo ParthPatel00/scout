@@ -34,7 +34,7 @@ pub fn list(_args: ListArgs) -> Result<()> {
     let registry = Registry::load()?;
 
     if registry.repos.is_empty() {
-        println!("No repos registered. Use `codesearch repos add <path> --name <name>`.");
+        println!("No repos registered. Use `scout repos add <name> [path]`.");
         return Ok(());
     }
 

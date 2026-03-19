@@ -1,10 +1,10 @@
 [package]
-name = "codesearch"
+name = "scout"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "codesearch"
+name = "scout"
 path = "src/main.rs"
 
 [features]

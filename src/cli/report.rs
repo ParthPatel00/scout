@@ -21,7 +21,7 @@ pub fn run(args: ReportArgs) -> Result<()> {
 
     if !db_path.exists() {
         bail!(
-            "No index found at {}. Run `codesearch index` first.",
+            "No index found at {}. Run `scout index` first.",
             root.display()
         );
     }

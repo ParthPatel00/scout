@@ -33,7 +33,7 @@ pub fn restore_from_backup(index_dir: &Path) -> Result<()> {
     let backup_path = index_dir.join("backup").join("metadata.db");
     if !backup_path.exists() {
         bail!(
-            "No backup found at {}. Run `codesearch rebuild` to regenerate the index.",
+            "No backup found at {}. Run `scout rebuild` to regenerate the index.",
             backup_path.display()
         );
     }
@@ -68,12 +68,12 @@ pub fn validate_checksum(index_dir: &Path, meta: &IndexMetadata) -> Result<()> {
         if restore_from_backup(index_dir).is_ok() {
             bail!(
                 "Index checksum mismatch — database was corrupted and has been restored from backup.\n\
-                 Re-run your command. If this keeps happening, run `codesearch rebuild`."
+                 Re-run your command. If this keeps happening, run `scout rebuild`."
             );
         }
         bail!(
             "Index checksum mismatch and no backup is available.\n\
-             Run `codesearch rebuild` to regenerate the index from scratch."
+             Run `scout rebuild` to regenerate the index from scratch."
         );
     }
     Ok(())

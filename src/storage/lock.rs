@@ -27,7 +27,7 @@ impl IndexLock {
         file.try_lock_exclusive().map_err(|_| {
             anyhow::anyhow!(
                 "Index is locked by another process. \
-                 Is another `codesearch index` running?"
+                 Is another `scout index` running?"
             )
         })?;
         Ok(Self { file })

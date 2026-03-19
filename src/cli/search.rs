@@ -4,7 +4,7 @@ use anyhow::{bail, Context, Result};
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
-use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
+use syntect::util::as_24_bit_terminal_escaped;
 
 use crate::index;
 use crate::cli::OutputFormat;
@@ -51,7 +51,7 @@ pub fn run(args: SearchArgs) -> Result<()> {
 
     if !tantivy_dir.join("meta.json").exists() {
         bail!(
-            "No index found at {}. Run `codesearch index` first.",
+            "No index found at {}. Run `scout index` first.",
             root.display()
         );
     }
@@ -61,9 +61,17 @@ pub fn run(args: SearchArgs) -> Result<()> {
         match crate::ml::model::load_model() {
             Ok(m) => Some(m),
             Err(e) => {
-                eprintln!("warning: could not load embedding model ({e}), falling back to BM25");
                 if !crate::ml::model::is_model_downloaded() {
+                    eprintln!("warning: embedding model not found — falling back to BM25 search.");
                     crate::ml::model::print_download_instructions();
+                } else {
+                    eprintln!("warning: could not load embedding model ({e})");
+                    eprintln!("         Falling back to BM25 search.");
+                    #[cfg(not(feature = "local-models"))]
+                    eprintln!(
+                        "         To enable local models, rebuild with: \
+                         cargo build --release --features local-models"
+                    );
                 }
                 None
             }
@@ -86,8 +94,24 @@ pub fn run(args: SearchArgs) -> Result<()> {
         rrf::fuse(&args.query, bm25_results)
     };
 
+    // Apply modified-since filter via SQLite (Tantivy doesn't store timestamps).
+    let results = if let Some(since) = args.filter.modified_since {
+        let db_path = index::db_path(&idx_dir);
+        let conn = sqlite::open(&db_path)?;
+        results
+            .into_iter()
+            .filter(|r| {
+                sqlite::get_file_last_indexed(&conn, &r.unit.file_path)
+                    .map(|t| t >= since)
+                    .unwrap_or(false)
+            })
+            .collect()
+    } else {
+        results
+    };
+
     if results.is_empty() {
-        eprintln!("No results for {:?}", args.query);
+        eprintln!("No results for \"{}\"", args.query);
         return Ok(());
     }
 
@@ -114,13 +138,13 @@ fn run_cross_repo(args: &SearchArgs) -> Result<()> {
     };
 
     if entries.is_empty() {
-        bail!("No repos selected. Register repos with `codesearch repos add`.");
+        bail!("No repos selected. Register repos with `scout repos add`.");
     }
 
     let hits = cross_repo::search_repos(&entries, &args.query, args.limit, &args.filter, None)?;
 
     if hits.is_empty() {
-        eprintln!("No results for {:?}", args.query);
+        eprintln!("No results for \"{}\"", args.query);
         return Ok(());
     }
 
@@ -161,22 +185,17 @@ fn run_cross_repo(args: &SearchArgs) -> Result<()> {
             }
         }
         _ => {
-            for (i, (repo, r)) in hits.iter().enumerate() {
+            for (repo, r) in hits.iter() {
                 println!(
-                    "\n{rank}. [{score:.2}] \x1b[2m[{repo}]\x1b[0m {unit_type} \x1b[1m{name}\x1b[0m",
-                    rank = i + 1,
-                    score = r.score,
-                    unit_type = r.unit.unit_type,
-                    name = r.unit.name,
-                );
-                println!(
-                    "   \x1b[2m{file}:{line}\x1b[0m   [{lang}]",
+                    "\x1b[2m[{repo}]\x1b[0m \x1b[2m{file}:{line}\x1b[0m  \x1b[1m{name}\x1b[0m  \x1b[2m{unit_type} · {lang}\x1b[0m",
                     file = r.unit.file_path,
                     line = r.unit.line_start,
+                    name = r.unit.name,
+                    unit_type = r.unit.unit_type,
                     lang = r.unit.language,
                 );
+                println!();
             }
-            println!();
         }
     }
     Ok(())
@@ -194,23 +213,23 @@ fn run_find_similar(args: &SearchArgs, loc: &str) -> Result<()> {
         return Ok(());
     }
 
-    println!("Functions similar to {}:{line}:", file_path);
-    for (i, (repo, r)) in hits.iter().enumerate() {
+    println!("Functions similar to {file_path}:{line}:\n");
+    for (repo, r) in hits.iter() {
+        let repo_prefix = if repo.is_empty() {
+            String::new()
+        } else {
+            format!("\x1b[2m[{repo}]\x1b[0m ")
+        };
         println!(
-            "\n{rank}. [{score:.4}] \x1b[2m[{repo}]\x1b[0m {unit_type} \x1b[1m{name}\x1b[0m",
-            rank = i + 1,
-            score = r.score,
-            unit_type = r.unit.unit_type,
-            name = r.unit.name,
-        );
-        println!(
-            "   \x1b[2m{file}:{line}\x1b[0m   [{lang}]",
+            "{repo_prefix}\x1b[2m{file}:{line}\x1b[0m  \x1b[1m{name}\x1b[0m  \x1b[2m{unit_type} · {lang}\x1b[0m",
             file = r.unit.file_path,
             line = r.unit.line_start,
+            name = r.unit.name,
+            unit_type = r.unit.unit_type,
             lang = r.unit.language,
         );
+        println!();
     }
-    println!();
     Ok(())
 }
 
@@ -243,46 +262,48 @@ fn output_plain(
         None
     };
 
-    for (i, result) in results.iter().enumerate() {
+    for result in results.iter() {
         let unit = &result.unit;
-        let repo_tag = result
+
+        // Repo tag (only for cross-repo results)
+        let repo_prefix = result
             .repo_name
             .as_deref()
-            .map(|r| format!(" \x1b[2m[{r}]\x1b[0m"))
+            .map(|r| format!("\x1b[2m[{r}]\x1b[0m "))
             .unwrap_or_default();
+
+        // Location in dim, name in bold
         println!(
-            "\n{rank}. [{score:.2}]{repo_tag} {unit_type} \x1b[1m{name}\x1b[0m",
-            rank = i + 1,
-            score = result.score,
-            unit_type = unit.unit_type,
-            name = unit.name,
-        );
-        println!(
-            "   \x1b[2m{file}:{line}\x1b[0m   [{lang}]",
+            "{repo_prefix}\x1b[2m{file}:{line}\x1b[0m  \x1b[1m{name}\x1b[0m  \x1b[2m{unit_type} · {lang}\x1b[0m",
             file = unit.file_path,
             line = unit.line_start,
+            name = unit.name,
+            unit_type = unit.unit_type,
             lang = unit.language,
         );
 
         if let Some(sig) = &unit.full_signature {
-            let syntax = ss
-                .find_syntax_by_extension(lang_ext(unit.language.as_str()))
-                .unwrap_or_else(|| ss.find_syntax_plain_text());
-            let mut h = HighlightLines::new(syntax, theme);
-            let highlighted: String = LinesWithEndings::from(sig)
-                .filter_map(|line| h.highlight_line(line, &ss).ok())
-                .map(|ranges| as_24_bit_terminal_escaped(&ranges, false))
-                .collect();
-            println!("   {}", highlighted.trim_end());
+            let first_line = sig.lines().next().unwrap_or("").trim();
+            if !first_line.is_empty() {
+                let syntax = ss
+                    .find_syntax_by_extension(lang_ext(unit.language.as_str()))
+                    .unwrap_or_else(|| ss.find_syntax_plain_text());
+                let mut h = HighlightLines::new(syntax, theme);
+                if let Ok(ranges) = h.highlight_line(first_line, &ss) {
+                    let highlighted = as_24_bit_terminal_escaped(&ranges, false);
+                    println!("  {highlighted}");
+                }
+            }
         } else if !result.snippet.is_empty() {
-            println!("   {}", result.snippet);
+            println!("  \x1b[2m{}\x1b[0m", result.snippet);
         }
 
         if let Some(conn) = &conn {
             print_context(conn, unit.id, &unit.name)?;
         }
+
+        println!();
     }
-    println!();
     Ok(())
 }
 

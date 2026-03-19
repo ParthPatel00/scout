@@ -283,6 +283,16 @@ pub fn unused_functions(conn: &Connection) -> Result<Vec<(String, String, usize,
     Ok(rows)
 }
 
+/// Return the `last_indexed` timestamp for a file, or `None` if not tracked.
+pub fn get_file_last_indexed(conn: &Connection, file_path: &str) -> Option<i64> {
+    conn.query_row(
+        "SELECT last_indexed FROM file_index WHERE file_path = ?1",
+        rusqlite::params![file_path],
+        |r| r.get(0),
+    )
+    .ok()
+}
+
 /// Find the code unit whose range contains `line` in `file_path`.
 pub fn unit_at_line(conn: &Connection, file_path: &str, line: usize) -> Option<CodeUnit> {
     let mut stmt = conn

@@ -3,8 +3,8 @@
 /// `IndexMetadata.version` tracks the index format. On open, this module
 /// compares the stored version against `CURRENT_VERSION`:
 ///   - Patch-compatible (same major): run incremental migrations silently.
-///   - Newer than binary: hard error — upgrade codesearch.
-///   - Major version too old: hard error — requires `codesearch rebuild`.
+///   - Newer than binary: hard error — upgrade scout.
+///   - Major version too old: hard error — requires `scout rebuild`.
 
 use anyhow::{bail, Result};
 use rusqlite::Connection;
@@ -23,9 +23,9 @@ pub fn run_migrations(conn: &Connection, meta: &mut IndexMetadata) -> Result<()>
 
     if meta.version > CURRENT_VERSION {
         bail!(
-            "Index was created by a newer version of codesearch \
+            "Index was created by a newer version of scout \
              (index format v{}, this binary supports up to v{}).\n\
-             Please upgrade codesearch.",
+             Please upgrade scout.",
             meta.version,
             CURRENT_VERSION
         );
@@ -51,7 +51,7 @@ fn migrate(conn: &Connection, from_version: u32, to_version: u32) -> Result<()> 
             // 1 => migrate_v1_to_v2(conn)?,
             _ => {
                 bail!(
-                    "No migration path from v{v} to v{}. Run `codesearch rebuild`.",
+                    "No migration path from v{v} to v{}. Run `scout rebuild`.",
                     v + 1
                 );
             }

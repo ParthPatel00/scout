@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-Scout (CodeSearch) is a semantic code search CLI tool currently in the **specification/design phase**. No implementation code exists yet. The two specification documents are the authoritative source of truth for all design decisions.
+Scout is a semantic code search CLI tool (binary: `scout`). Phases 1–8 are complete and the tool is functional. The primary UX is `scout "query"` — no subcommand needed for search.
 
 ## Specification Documents
 
@@ -87,16 +87,15 @@ Vector quantization pipeline: f32 → u8 (4x) → product quantization (32x) →
 - Index corruption: checksums + auto-backup + rebuild capability
 - Cross-platform: static linking required for distribution; CI matrix across Linux/macOS/Windows
 
-## Planned CLI Interface
+## CLI Interface
 
 ```bash
-codesearch index                          # Build index for current repo
-codesearch <query>                        # Default search
-codesearch --semantic <query>             # Force semantic search
-codesearch repos add/list/remove          # Multi-repo management
-codesearch daemon start/stop/status       # Background indexing daemon
-codesearch config --set-api-key <key>     # Secure API key storage
-codesearch optimize/cleanup/rebuild       # Index maintenance
+scout "query"                         # Search (default — no subcommand needed)
+scout index                           # Build/update index for current repo
+scout "query" --semantic              # Semantic search
+scout repos add/list/remove           # Multi-repo management
+scout daemon start/stop/status        # Background indexing daemon
+scout optimize/cleanup/rebuild        # Index maintenance
 ```
 
 ## Implementation Plan

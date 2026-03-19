@@ -33,7 +33,7 @@ pub fn registry_path() -> PathBuf {
         .unwrap_or_else(|_| ".".to_string());
     PathBuf::from(home)
         .join(".config")
-        .join("codesearch")
+        .join("scout")
         .join("repos.json")
 }
 
