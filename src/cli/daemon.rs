@@ -124,17 +124,16 @@ pub struct StopArgs {
 }
 
 pub fn stop(args: StopArgs) -> Result<()> {
-    let root = args.path.canonicalize().context("path not found")?;
-    let idx_dir = index::index_dir(&root)?;
-
     #[cfg(not(unix))]
     {
-        let _ = &idx_dir;
+        let _ = args;
         bail!("Stopping the daemon is not supported on this platform.");
     }
 
     #[cfg(unix)]
     {
+        let root = args.path.canonicalize().context("path not found")?;
+        let idx_dir = index::index_dir(&root)?;
         let state = read_state(&idx_dir)
             .filter(|s| is_running(s.pid))
             .ok_or_else(|| anyhow::anyhow!("No daemon is running for this repository."))?;
@@ -143,9 +142,8 @@ pub fn stop(args: StopArgs) -> Result<()> {
         }
         remove_state(&idx_dir);
         println!("Daemon stopped (PID {}).", state.pid);
+        Ok(())
     }
-
-    Ok(())
 }
 
 // ─── Status ───────────────────────────────────────────────────────────────────
