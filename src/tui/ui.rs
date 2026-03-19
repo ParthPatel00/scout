@@ -113,7 +113,12 @@ fn render_preview(f: &mut Frame, app: &App, area: Rect) {
     ];
 
     // Syntax-highlighted body or signature.
-    let source = unit.full_signature.as_deref().unwrap_or(unit.body.as_str());
+    // Prefer full body; fall back to signature header if body is empty.
+    let source = if !unit.body.is_empty() {
+        unit.body.as_str()
+    } else {
+        unit.full_signature.as_deref().unwrap_or("")
+    };
     if !source.is_empty() {
         lines.extend(highlight_source(source, lang_ext));
     }
