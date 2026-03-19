@@ -1,4 +1,5 @@
 mod cli;
+mod editor;
 mod index;
 mod ml;
 mod repo;
@@ -95,12 +96,13 @@ enum Command {
         #[arg(long)]
         no_tui: bool,
 
-        /// Semantic (vector embedding) search — requires model download.
+        /// Force pure vector-only search (requires model). Default already uses
+        /// the best available method automatically.
         #[arg(long)]
         semantic: bool,
 
-        /// Hybrid mode: BM25 + semantic + name-match (best quality, requires model).
-        #[arg(long)]
+        /// Deprecated: hybrid search is now the default. Accepted but ignored.
+        #[arg(long, hide = true)]
         best: bool,
 
         /// Search across all registered repos.
@@ -276,6 +278,7 @@ fn main() -> Result<()> {
                 && repos.is_none()
                 && std::io::stdout().is_terminal();
 
+            let _ = best; // accepted for backwards compatibility, no longer needed
             cli::search::run(cli::search::SearchArgs {
                 path,
                 query,
@@ -285,7 +288,6 @@ fn main() -> Result<()> {
                 format,
                 use_tui,
                 semantic,
-                best,
                 all_repos,
                 repos,
                 find_similar,

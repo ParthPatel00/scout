@@ -172,13 +172,19 @@ fn syntect_to_ratatui(color: SColor) -> Color {
 // ─── Help bar ─────────────────────────────────────────────────────────────────
 
 fn render_help_bar(f: &mut Frame, area: Rect) {
+    let key = |s| Span::styled(s, Style::default().fg(Color::Yellow));
+    let dim = |s| Span::styled(s, Style::default().fg(Color::DarkGray));
     let help = Line::from(vec![
-        Span::styled(" j/k", Style::default().fg(Color::Yellow)),
-        Span::styled(": navigate  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("d/u", Style::default().fg(Color::Yellow)),
-        Span::styled(": scroll preview  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("q", Style::default().fg(Color::Yellow)),
-        Span::styled(": quit", Style::default().fg(Color::DarkGray)),
+        key(" j/k"),
+        dim(": navigate  "),
+        key("Enter"),
+        dim(": open in editor  "),
+        key("o"),
+        dim(": open (stay)  "),
+        key("d/u"),
+        dim(": scroll  "),
+        key("q"),
+        dim(": quit"),
     ]);
     f.render_widget(Paragraph::new(help), area);
 }

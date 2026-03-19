@@ -27,7 +27,7 @@ scout "retry logic for failed payments"
 scout "how does caching work"
 ```
 
-Scout launches an **interactive TUI** when run in a terminal. Use `j`/`k` to navigate, `Enter` to expand a preview, `q` to quit. When piped, it outputs plain text.
+Scout launches an **interactive TUI** when run in a terminal. Navigate with `j`/`k`, press `Enter` to open the result in your editor at the exact line, `q` to quit. When piped, it outputs plain text.
 
 ```
 services/auth/service.py:25   AuthenticationError   class · python

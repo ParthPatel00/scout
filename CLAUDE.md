@@ -98,6 +98,21 @@ scout daemon start/stop/status        # Background indexing daemon
 scout optimize/cleanup/rebuild        # Index maintenance
 ```
 
+### TUI key bindings
+- `j`/`k` or arrows — navigate results
+- `Enter` — open selected result in editor at exact line, exit TUI
+- `o` — open in editor and stay in TUI
+- `d`/`u` or PageDown/PageUp — scroll preview
+- `q`/`Esc` — quit
+
+### Editor detection (`src/editor.rs`)
+Resolution order: `$SCOUT_EDITOR` → `$VISUAL` → `$EDITOR` → auto-detect from PATH.
+- VS Code / Cursor: `code --goto file:line` (non-blocking)
+- Zed: `zed file:line` (non-blocking)
+- Neovim/Vim: `nvim +line file` (blocking — takes over the TTY)
+- Helix: `hx file:line` (blocking)
+- Others via `$EDITOR`: `editor +line file` (blocking)
+
 ## Implementation Plan
 
 **Current Phase: Phase 9 — Cloud AI & Security**

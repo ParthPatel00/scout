@@ -40,8 +40,18 @@ scout "payment webhook handler"
 |-----|--------|
 | `j` / `↓` | Next result |
 | `k` / `↑` | Previous result |
-| `Enter` | Toggle code preview |
+| `Enter` | **Open in editor at exact line**, exit TUI |
+| `o` | Open in editor, stay in TUI |
+| `d` / `PageDown` | Scroll preview down |
+| `u` / `PageUp` | Scroll preview up |
 | `q` / `Esc` | Quit |
+
+Scout detects your editor automatically from `$SCOUT_EDITOR`, `$VISUAL`, `$EDITOR`, or by checking your PATH for `nvim`, `vim`, `hx`, `code`, `zed`, etc. You can override it:
+
+```bash
+export SCOUT_EDITOR=nvim   # always use Neovim
+export SCOUT_EDITOR=code   # always use VS Code
+```
 
 ### Examples
 

@@ -1017,14 +1017,30 @@ Beautiful terminal UI with:
 - Preview pane
 - Jump to editor (VSCode, Neovim, Vim)
 
-#### **8. Editor Integration**
-```bash
-# VSCode extension
-# Neovim plugin
-# Vim plugin
+#### **8. Editor Integration — Open at Exact Line**
 
-# Opens file at exact line when you press Enter
-```
+From the TUI, pressing `Enter` on any result opens the file at the exact line in the
+user's preferred editor, then returns to the terminal. No manual copy-paste of paths.
+
+**Editor resolution order:**
+1. `$SCOUT_EDITOR` environment variable (Scout-specific override)
+2. `$VISUAL` environment variable
+3. `$EDITOR` environment variable
+4. Auto-detect from PATH: `nvim` → `vim` → `hx` → `nano` → `emacs` → `code` → `zed`
+
+**Open commands per editor:**
+- VS Code / Cursor: `code --goto file:line` (non-blocking, GUI app)
+- Zed: `zed file:line` (non-blocking, GUI app)
+- Neovim / Vim: `nvim +line file` (blocks terminal — takes over the TTY)
+- Helix: `hx file:line`
+- nano, emacs, and others via `$EDITOR`: `$EDITOR +line file`
+
+**Keyboard bindings in TUI:**
+- `Enter` — open selected result in editor and exit TUI
+- `o` — open in editor and stay in TUI (for browsing multiple results)
+
+**Plain-text / piped mode:**
+Results already print `file:line` so users can click or copy. No editor launch in non-TUI modes.
 
 #### **9. Git Hooks**
 ```bash

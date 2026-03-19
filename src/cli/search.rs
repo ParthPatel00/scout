@@ -9,7 +9,7 @@ use syntect::util::as_24_bit_terminal_escaped;
 use crate::index;
 use crate::cli::OutputFormat;
 use crate::repo::registry::Registry;
-use crate::search::{bm25, cross_repo, hybrid, rrf, SearchFilter};
+use crate::search::{cross_repo, hybrid, SearchFilter};
 use crate::storage::sqlite;
 
 pub struct SearchArgs {
@@ -20,10 +20,8 @@ pub struct SearchArgs {
     pub show_context: bool,
     pub format: Option<OutputFormat>,
     pub use_tui: bool,
-    /// Use semantic (vector) search only.
+    /// Force pure vector-only search (skips BM25 entirely).
     pub semantic: bool,
-    /// Hybrid mode: BM25 + vector + name-match (highest quality).
-    pub best: bool,
     /// Search all registered repos.
     pub all_repos: bool,
     /// Comma-separated repo names to search.
@@ -56,31 +54,39 @@ pub fn run(args: SearchArgs) -> Result<()> {
         );
     }
 
-    let use_vectors = args.semantic || args.best;
-    let model: Option<Box<dyn crate::ml::EmbeddingModel>> = if use_vectors {
-        match crate::ml::model::load_model() {
-            Ok(m) => Some(m),
-            Err(e) => {
+    // Always try to load the embedding model silently.
+    // With model → 3-component fusion (BM25 + name-match + vector).
+    // Without model → 2-component fusion (BM25 + name-match). No warning.
+    // --semantic is the one exception: it means "vector only, no BM25".
+    let model: Option<Box<dyn crate::ml::EmbeddingModel>> =
+        crate::ml::model::load_model().ok().map(|m| m);
+
+    let results = if args.semantic {
+        // Pure vector search: only warn if the model is genuinely missing.
+        match &model {
+            Some(m) => hybrid::search_semantic_only(
+                &vector_path,
+                &args.query,
+                args.limit,
+                &args.filter,
+                m.as_ref(),
+            )?,
+            None => {
                 if !crate::ml::model::is_model_downloaded() {
-                    eprintln!("warning: embedding model not found — falling back to BM25 search.");
+                    eprintln!("--semantic requires the embedding model.");
                     crate::ml::model::print_download_instructions();
                 } else {
-                    eprintln!("warning: could not load embedding model ({e})");
-                    eprintln!("         Falling back to BM25 search.");
                     #[cfg(not(feature = "local-models"))]
                     eprintln!(
-                        "         To enable local models, rebuild with: \
+                        "Local model support is not compiled in. Rebuild with:\n  \
                          cargo build --release --features local-models"
                     );
                 }
-                None
+                return Ok(());
             }
         }
     } else {
-        None
-    };
-
-    let results = if use_vectors {
+        // Default: hybrid fusion. Falls back to BM25+name-match if no model.
         hybrid::search(
             &tantivy_dir,
             &vector_path,
@@ -89,9 +95,6 @@ pub fn run(args: SearchArgs) -> Result<()> {
             &args.filter,
             model.as_deref(),
         )?
-    } else {
-        let bm25_results = bm25::search(&tantivy_dir, &args.query, args.limit, &args.filter)?;
-        rrf::fuse(&args.query, bm25_results)
     };
 
     // Apply modified-since filter via SQLite (Tantivy doesn't store timestamps).
@@ -117,7 +120,7 @@ pub fn run(args: SearchArgs) -> Result<()> {
 
     // Launch TUI when in a terminal with no format override.
     if args.use_tui {
-        return crate::tui::run(args.query, results);
+        return crate::tui::run(args.query, results, root);
     }
 
     match args.format {
