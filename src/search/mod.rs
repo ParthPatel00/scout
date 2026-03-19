@@ -45,7 +45,8 @@ impl SearchFilter {
 }
 
 pub fn is_test_file(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
+    // Normalise OS path separators so patterns work on both Windows (\) and Unix (/).
+    let lower = path.replace('\\', "/").to_ascii_lowercase();
     lower.contains("/test/")
         || lower.contains("/tests/")
         || lower.contains("/spec/")
@@ -214,6 +215,28 @@ mod tests {
     fn is_test_file_slash_test_underscore_infix() {
         assert!(is_test_file("src/test_helpers/util.rs"));
         assert!(is_test_file("src/test_utils.go"));
+    }
+
+    // Windows backslash paths must be handled identically to forward-slash paths.
+    #[test]
+    fn is_test_file_windows_backslash_tests_dir() {
+        assert!(is_test_file("project\\tests\\unit\\auth.py"));
+    }
+
+    #[test]
+    fn is_test_file_windows_backslash_test_dir() {
+        assert!(is_test_file("src\\test\\helpers.rs"));
+    }
+
+    #[test]
+    fn is_test_file_windows_backslash_test_underscore() {
+        assert!(is_test_file("src\\test_utils.go"));
+    }
+
+    #[test]
+    fn is_test_file_windows_backslash_non_test_file() {
+        assert!(!is_test_file("services\\auth\\login.rs"));
+        assert!(!is_test_file("src\\payments\\processor.rs"));
     }
 
     #[test]
