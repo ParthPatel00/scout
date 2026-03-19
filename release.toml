@@ -1,0 +1,17 @@
+# cargo-release configuration
+# https://github.com/crate-ci/cargo-release
+
+# Commit message when bumping the version
+commit-message = "release {{version}}"
+
+# Git tag format
+tag-name = "v{{version}}"
+
+# Push the commit and tag to origin automatically
+push = true
+
+# Publish to crates.io? Set to true when ready.
+publish = false
+
+# Run these checks before releasing
+pre-release-hook = ["cargo", "test", "--locked"]
