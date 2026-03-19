@@ -38,6 +38,7 @@ pub fn parse_file(file_path: &str, source: &str, language: &Language) -> Result<
         Language::Go => extract_go(file_path, source, root),
         Language::Java => extract_java(file_path, source, root),
         Language::Cpp => extract_cpp(file_path, source, root),
+
         Language::Unknown => vec![],
     };
 
@@ -54,7 +55,7 @@ fn ts_language(lang: &Language) -> Option<TsLanguage> {
         Language::JavaScript => Some(tree_sitter_javascript::LANGUAGE.into()),
         Language::Go => Some(tree_sitter_go::LANGUAGE.into()),
         Language::Java => Some(tree_sitter_java::LANGUAGE.into()),
-        Language::Cpp => None, // Phase 4
+        Language::Cpp => Some(tree_sitter_cpp::LANGUAGE.into()),
         Language::Unknown => None,
     }
 }
@@ -625,9 +626,78 @@ fn java_calls(node: Node, source: &str) -> Vec<String> {
 // ─── C++ ─────────────────────────────────────────────────────────────────────
 
 fn extract_cpp(file_path: &str, source: &str, root: Node) -> Vec<CodeUnit> {
-    // C++ grammar support added in Phase 4. For now return empty.
-    let _ = (file_path, source, root);
-    vec![]
+    let mut units = Vec::new();
+    extract_cpp_node(file_path, source, root, &mut units);
+    units
+}
+
+fn extract_cpp_node(file_path: &str, source: &str, node: Node, units: &mut Vec<CodeUnit>) {
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        match child.kind() {
+            "function_definition" => {
+                // declarator → function_declarator → identifier or qualified_identifier
+                if let Some(decl) = child_of_kind(child, "function_declarator")
+                    .or_else(|| child_of_kind(child, "declarator"))
+                {
+                    let name_node = child_of_kind(decl, "identifier")
+                        .or_else(|| child_of_kind(decl, "qualified_identifier"));
+                    if let Some(name_node) = name_node {
+                        let name = node_text(name_node, source).to_string();
+                        let mut unit = make_unit(
+                            file_path,
+                            Language::Cpp,
+                            UnitType::Function,
+                            &name,
+                            child,
+                            source,
+                        );
+                        unit.full_signature = Some(extract_rust_signature(child, source));
+                        unit.calls = dedup(cpp_calls(child, source));
+                        units.push(unit);
+                    }
+                }
+            }
+            "class_specifier" | "struct_specifier" => {
+                if let Some(name_node) = child_of_kind(child, "type_identifier") {
+                    let name = node_text(name_node, source).to_string();
+                    let unit_type = if child.kind() == "struct_specifier" {
+                        UnitType::Struct
+                    } else {
+                        UnitType::Class
+                    };
+                    let unit = make_unit(file_path, Language::Cpp, unit_type, &name, child, source);
+                    units.push(unit);
+                    // Recurse into class body for methods.
+                    extract_cpp_node(file_path, source, child, units);
+                }
+            }
+            _ => extract_cpp_node(file_path, source, child, units),
+        }
+    }
+}
+
+fn cpp_calls(node: Node, source: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_calls_recursive(node, source, &mut out, &|n, src, calls| {
+        if n.kind() == "call_expression" {
+            if let Some(func) = n.named_child(0) {
+                match func.kind() {
+                    "identifier" => calls.push(node_text(func, src).to_string()),
+                    "field_expression" | "qualified_identifier" => {
+                        let mut c = func.walk();
+                        if let Some(last) = func.named_children(&mut c).last() {
+                            if last.kind() == "identifier" || last.kind() == "field_identifier" {
+                                calls.push(node_text(last, src).to_string());
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    });
+    out
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────

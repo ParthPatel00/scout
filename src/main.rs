@@ -2,13 +2,16 @@ mod cli;
 mod index;
 mod search;
 mod storage;
+mod tui;
 mod types;
 
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+use crate::cli::OutputFormat;
 use crate::search::SearchFilter;
 
 #[derive(Parser)]
@@ -35,7 +38,7 @@ enum Command {
         verbose: bool,
     },
 
-    /// Search the index (BM25 + RRF re-ranking).
+    /// Search the index (BM25 + RRF re-ranking). Launches TUI when in a terminal.
     #[command(alias = "s")]
     Search {
         /// The search query.
@@ -68,6 +71,14 @@ enum Command {
         /// Show callers and callees of each result.
         #[arg(long)]
         show_context: bool,
+
+        /// Output format (plain, json, csv). Defaults to plain when piped, TUI when in a terminal.
+        #[arg(long, value_enum)]
+        format: Option<OutputFormat>,
+
+        /// Always use plain-text output, never launch the TUI.
+        #[arg(long)]
+        no_tui: bool,
     },
 
     /// Generate reports about the codebase.
@@ -103,22 +114,32 @@ fn main() -> Result<()> {
             modified_last,
             exclude_tests,
             show_context,
+            format,
+            no_tui,
         } => {
-            let modified_since = modified_last.map(|days| {
-                chrono::Utc::now().timestamp() - (days as i64 * 86_400)
-            });
+            let modified_since = modified_last
+                .map(|days| chrono::Utc::now().timestamp() - (days as i64 * 86_400));
             let filter = SearchFilter {
                 lang,
                 path_prefix: path_filter,
                 modified_since,
                 exclude_tests,
             };
+
+            // Decide output mode: TUI when stdout is a terminal and no override flags.
+            let use_tui = !no_tui
+                && format.is_none()
+                && !show_context
+                && std::io::stdout().is_terminal();
+
             cli::search::run(cli::search::SearchArgs {
                 path,
                 query,
                 limit,
                 filter,
                 show_context,
+                format,
+                use_tui,
             })?;
         }
         Command::Report { path, kind } => {

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
+use indicatif::{ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
 
 use crate::index::{self, walker};
@@ -35,6 +36,14 @@ pub fn run(args: IndexArgs) -> Result<()> {
         println!("Found {} source files to consider", files.len());
     }
 
+    let pb = ProgressBar::new(files.len() as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}")
+            .unwrap()
+            .progress_chars("=>-"),
+    );
+
     let mut indexed = 0usize;
     let mut skipped = 0usize;
     let mut total_units = 0usize;
@@ -54,6 +63,9 @@ pub fn run(args: IndexArgs) -> Result<()> {
             .unwrap_or(file_path)
             .to_string_lossy()
             .to_string();
+
+        pb.set_message(rel_path.clone());
+        pb.inc(1);
 
         // Skip unchanged files.
         if let Ok(Some(stored_hash)) = sqlite::get_file_hash(&conn, &rel_path) {
@@ -120,6 +132,8 @@ pub fn run(args: IndexArgs) -> Result<()> {
             println!("  indexed ({unit_count} units): {rel_path}");
         }
     }
+
+    pb.finish_and_clear();
 
     // Commit the Tantivy writer so searches see the new data.
     writer.commit().context("failed to commit tantivy index")?;
