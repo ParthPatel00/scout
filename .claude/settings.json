@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{ read -r payload; f=$(echo \"$payload\" | jq -r '.tool_input.file_path // .tool_response.filePath // empty'); echo \"$f\" | grep -q '\\.rs$' && (cd /Users/parthpatel/Projects/Scout_cli_tool/scout && ~/.cargo/bin/cargo test 2>&1) || true; }",
+            "timeout": 120,
+            "statusMessage": "Running cargo test..."
+          }
+        ]
+      }
+    ]
+  }
+}

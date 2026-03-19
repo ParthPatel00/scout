@@ -152,3 +152,155 @@ pub fn run(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{CodeUnit, Language, SearchResult, UnitType};
+    use std::path::PathBuf;
+
+    fn make_result(name: &str, file: &str, line: usize, body: &str) -> SearchResult {
+        let mut unit = CodeUnit::new(
+            file,
+            Language::Rust,
+            UnitType::Function,
+            name,
+            line,
+            line + 5,
+            body,
+        );
+        unit.id = 1;
+        SearchResult { unit, score: 1.0, snippet: name.to_string(), repo_name: None }
+    }
+
+    fn make_app(n: usize) -> App {
+        let results = (0..n)
+            .map(|i| make_result(&format!("fn_{i}"), &format!("src/file{i}.rs"), i + 1, "fn body() {}"))
+            .collect();
+        App::new("query".into(), results, PathBuf::from("/tmp"), None)
+    }
+
+    // ── navigation ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn next_advances_selection() {
+        let mut app = make_app(3);
+        assert_eq!(app.selected, 0);
+        app.next();
+        assert_eq!(app.selected, 1);
+        app.next();
+        assert_eq!(app.selected, 2);
+    }
+
+    #[test]
+    fn next_clamps_at_last() {
+        let mut app = make_app(2);
+        app.next();
+        app.next(); // try to go past last
+        app.next();
+        assert_eq!(app.selected, 1); // clamped
+    }
+
+    #[test]
+    fn previous_decrements_selection() {
+        let mut app = make_app(3);
+        app.selected = 2;
+        app.previous();
+        assert_eq!(app.selected, 1);
+        app.previous();
+        assert_eq!(app.selected, 0);
+    }
+
+    #[test]
+    fn previous_clamps_at_zero() {
+        let mut app = make_app(3);
+        app.previous();
+        app.previous();
+        assert_eq!(app.selected, 0);
+    }
+
+    #[test]
+    fn navigation_resets_preview_scroll() {
+        let mut app = make_app(3);
+        app.preview_scroll = 10;
+        app.next();
+        assert_eq!(app.preview_scroll, 0);
+
+        app.preview_scroll = 7;
+        app.previous();
+        assert_eq!(app.preview_scroll, 0);
+    }
+
+    #[test]
+    fn next_on_empty_results_does_not_panic() {
+        let mut app = make_app(0);
+        app.next();
+        app.previous();
+        assert_eq!(app.selected, 0);
+    }
+
+    // ── preview scroll ────────────────────────────────────────────────────────
+
+    #[test]
+    fn scroll_preview_down_increments() {
+        let mut app = make_app(1);
+        app.scroll_preview_down();
+        assert_eq!(app.preview_scroll, 3);
+        app.scroll_preview_down();
+        assert_eq!(app.preview_scroll, 6);
+    }
+
+    #[test]
+    fn scroll_preview_up_decrements_no_underflow() {
+        let mut app = make_app(1);
+        app.preview_scroll = 3;
+        app.scroll_preview_up();
+        assert_eq!(app.preview_scroll, 0);
+        app.scroll_preview_up(); // saturating_sub, must not underflow
+        assert_eq!(app.preview_scroll, 0);
+    }
+
+    // ── selected_result ───────────────────────────────────────────────────────
+
+    #[test]
+    fn selected_result_returns_current() {
+        let app = make_app(3);
+        assert_eq!(app.selected_result().unwrap().unit.name, "fn_0");
+    }
+
+    #[test]
+    fn selected_result_returns_none_when_empty() {
+        let app = make_app(0);
+        assert!(app.selected_result().is_none());
+    }
+
+    // ── open_selected ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn open_selected_sets_editor_target_and_quit_flag() {
+        let mut app = make_app(3);
+        app.selected = 1;
+        app.open_selected();
+        assert!(app.should_quit);
+        let (file, line) = app.open_in_editor.unwrap();
+        assert_eq!(file, "src/file1.rs");
+        assert_eq!(line, 2); // line_start = i + 1 for i=1
+    }
+
+    #[test]
+    fn open_selected_on_empty_does_not_panic() {
+        let mut app = make_app(0);
+        app.open_selected(); // must not panic
+        assert!(!app.should_quit);
+        assert!(app.open_in_editor.is_none());
+    }
+
+    // ── preview body vs signature ─────────────────────────────────────────────
+
+    #[test]
+    fn result_body_is_non_empty_for_preview() {
+        // Verify that make_result sets a non-empty body (tests the preview fix assumption)
+        let r = make_result("authenticate", "src/auth.rs", 10, "fn authenticate() { check() }");
+        assert!(!r.unit.body.is_empty(), "body must be non-empty for preview to work");
+    }
+}

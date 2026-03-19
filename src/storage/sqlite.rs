@@ -337,3 +337,206 @@ pub fn count_files(conn: &Connection) -> Result<usize> {
         conn.query_row("SELECT COUNT(*) FROM file_index", [], |r| r.get(0))?;
     Ok(n as usize)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Language, UnitType};
+
+    fn in_memory_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;",
+        )
+        .unwrap();
+        initialize_schema(&conn).unwrap();
+        conn
+    }
+
+    fn sample_unit(name: &str) -> CodeUnit {
+        CodeUnit::new(
+            "src/foo.rs",
+            Language::Rust,
+            UnitType::Function,
+            name,
+            1,
+            10,
+            "fn foo() { }",
+        )
+    }
+
+    // ── insert_unit / unit_by_id ──────────────────────────────────────────────
+
+    #[test]
+    fn insert_and_fetch_by_id() {
+        let conn = in_memory_db();
+        let id = insert_unit(&conn, &sample_unit("my_func")).unwrap();
+        assert!(id > 0);
+        let fetched = unit_by_id(&conn, id).expect("unit must exist");
+        assert_eq!(fetched.name, "my_func");
+        assert_eq!(fetched.body, "fn foo() { }");
+        assert_eq!(fetched.language, Language::Rust);
+    }
+
+    #[test]
+    fn unit_by_id_missing_returns_none() {
+        let conn = in_memory_db();
+        assert!(unit_by_id(&conn, 9999).is_none());
+    }
+
+    // ── count_units / count_files ─────────────────────────────────────────────
+
+    #[test]
+    fn count_units_empty_and_after_insert() {
+        let conn = in_memory_db();
+        assert_eq!(count_units(&conn).unwrap(), 0);
+        insert_unit(&conn, &sample_unit("a")).unwrap();
+        insert_unit(&conn, &sample_unit("b")).unwrap();
+        assert_eq!(count_units(&conn).unwrap(), 2);
+    }
+
+    // ── get_file_hash / upsert_file_record ────────────────────────────────────
+
+    #[test]
+    fn file_hash_missing_returns_none() {
+        let conn = in_memory_db();
+        assert!(get_file_hash(&conn, "no/such/file.rs").unwrap().is_none());
+    }
+
+    #[test]
+    fn upsert_and_get_file_hash() {
+        let conn = in_memory_db();
+        let record = FileRecord {
+            file_path: "src/lib.rs".into(),
+            file_hash: "abc123".into(),
+            last_indexed: 1_000_000,
+            needs_reindex: false,
+        };
+        upsert_file_record(&conn, &record).unwrap();
+        let hash = get_file_hash(&conn, "src/lib.rs").unwrap();
+        assert_eq!(hash.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn upsert_overwrites_existing_hash() {
+        let conn = in_memory_db();
+        let r1 = FileRecord {
+            file_path: "src/lib.rs".into(),
+            file_hash: "old_hash".into(),
+            last_indexed: 1,
+            needs_reindex: false,
+        };
+        upsert_file_record(&conn, &r1).unwrap();
+        let r2 = FileRecord { file_hash: "new_hash".into(), ..r1 };
+        upsert_file_record(&conn, &r2).unwrap();
+        assert_eq!(
+            get_file_hash(&conn, "src/lib.rs").unwrap().as_deref(),
+            Some("new_hash")
+        );
+        assert_eq!(count_files(&conn).unwrap(), 1); // no duplicate row
+    }
+
+    // ── delete_units_for_file ─────────────────────────────────────────────────
+
+    #[test]
+    fn delete_units_for_file_removes_rows() {
+        let conn = in_memory_db();
+        let mut u1 = sample_unit("fn_a");
+        u1.file_path = "src/a.rs".into();
+        let mut u2 = sample_unit("fn_b");
+        u2.file_path = "src/b.rs".into();
+        insert_unit(&conn, &u1).unwrap();
+        insert_unit(&conn, &u2).unwrap();
+        assert_eq!(count_units(&conn).unwrap(), 2);
+
+        delete_units_for_file(&conn, "src/a.rs").unwrap();
+        assert_eq!(count_units(&conn).unwrap(), 1);
+        let remaining = units_for_file(&conn, "src/b.rs").unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].name, "fn_b");
+    }
+
+    // ── units_for_file ────────────────────────────────────────────────────────
+
+    #[test]
+    fn units_for_file_returns_correct_units() {
+        let conn = in_memory_db();
+        let mut u = sample_unit("do_thing");
+        u.file_path = "src/util.rs".into();
+        insert_unit(&conn, &u).unwrap();
+        insert_unit(&conn, &sample_unit("other")).unwrap(); // different file
+
+        let units = units_for_file(&conn, "src/util.rs").unwrap();
+        assert_eq!(units.len(), 1);
+        assert_eq!(units[0].name, "do_thing");
+    }
+
+    // ── insert_call_edge / callers_of / callees_of ────────────────────────────
+
+    #[test]
+    fn call_graph_round_trip() {
+        let conn = in_memory_db();
+        let mut caller = sample_unit("caller_fn");
+        caller.file_path = "src/main.rs".into();
+        let caller_id = insert_unit(&conn, &caller).unwrap();
+
+        let mut callee = sample_unit("helper_fn");
+        callee.file_path = "src/main.rs".into();
+        insert_unit(&conn, &callee).unwrap();
+
+        let edge = CallEdge {
+            caller_id,
+            callee_name: "helper_fn".into(),
+            line_number: 5,
+        };
+        insert_call_edge(&conn, &edge).unwrap();
+
+        let callers = callers_of(&conn, "helper_fn").unwrap();
+        assert_eq!(callers.len(), 1);
+        assert_eq!(callers[0].0, "caller_fn");
+
+        let callees = callees_of(&conn, caller_id).unwrap();
+        assert_eq!(callees.len(), 1);
+        assert_eq!(callees[0].0, "helper_fn");
+    }
+
+    // ── unit_at_line ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn unit_at_line_finds_containing_unit() {
+        let conn = in_memory_db();
+        let mut u = sample_unit("my_fn");
+        u.file_path = "src/foo.rs".into();
+        u.line_start = 5;
+        u.line_end = 15;
+        insert_unit(&conn, &u).unwrap();
+
+        // line inside range
+        let found = unit_at_line(&conn, "src/foo.rs", 10);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name, "my_fn");
+
+        // line outside range
+        assert!(unit_at_line(&conn, "src/foo.rs", 20).is_none());
+    }
+
+    // ── body round-trip (critical for preview fix) ────────────────────────────
+
+    #[test]
+    fn body_is_persisted_and_retrieved_intact() {
+        let conn = in_memory_db();
+        let body = "fn authenticate(user: &str) -> bool {\n    user == \"admin\"\n}";
+        let unit = CodeUnit::new(
+            "src/auth.rs",
+            Language::Rust,
+            UnitType::Function,
+            "authenticate",
+            1,
+            3,
+            body,
+        );
+        let id = insert_unit(&conn, &unit).unwrap();
+        let fetched = unit_by_id(&conn, id).unwrap();
+        assert_eq!(fetched.body, body);
+    }
+}

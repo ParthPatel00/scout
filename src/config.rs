@@ -206,3 +206,131 @@ fn parse_bool(s: &str) -> Result<bool> {
         _ => anyhow::bail!("expected true/false, got '{}'", s),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn default_config() -> Config {
+        Config::default()
+    }
+
+    // ── defaults ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn default_values() {
+        let cfg = default_config();
+        assert_eq!(cfg.search.limit, 10);
+        assert!(!cfg.search.no_tui);
+        assert!(cfg.search.format.is_none());
+        assert!(!cfg.search.exclude_tests);
+        assert!(!cfg.index.auto_index);
+        assert!(cfg.editor.command.is_none());
+    }
+
+    // ── Config::get ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn get_known_keys_return_defaults() {
+        let cfg = default_config();
+        assert_eq!(cfg.get("search.limit").unwrap(), "10");
+        assert_eq!(cfg.get("search.no_tui").unwrap(), "false");
+        assert_eq!(cfg.get("search.format").unwrap(), "plain");
+        assert_eq!(cfg.get("search.exclude_tests").unwrap(), "false");
+        assert_eq!(cfg.get("index.auto_index").unwrap(), "false");
+        assert_eq!(cfg.get("editor.command").unwrap(), "(auto-detect)");
+    }
+
+    #[test]
+    fn get_unknown_key_errors() {
+        assert!(default_config().get("unknown.key").is_err());
+    }
+
+    // ── Config::set ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn set_search_limit() {
+        let mut cfg = default_config();
+        cfg.set("search.limit", "25").unwrap();
+        assert_eq!(cfg.search.limit, 25);
+        assert_eq!(cfg.get("search.limit").unwrap(), "25");
+    }
+
+    #[test]
+    fn set_search_limit_invalid_errors() {
+        let mut cfg = default_config();
+        assert!(cfg.set("search.limit", "not_a_number").is_err());
+    }
+
+    #[test]
+    fn set_search_no_tui_variants() {
+        let mut cfg = default_config();
+        for truthy in &["true", "yes", "1", "on"] {
+            cfg.set("search.no_tui", truthy).unwrap();
+            assert!(cfg.search.no_tui, "expected true for '{}'", truthy);
+        }
+        for falsy in &["false", "no", "0", "off"] {
+            cfg.set("search.no_tui", falsy).unwrap();
+            assert!(!cfg.search.no_tui, "expected false for '{}'", falsy);
+        }
+    }
+
+    #[test]
+    fn set_search_format_valid() {
+        let mut cfg = default_config();
+        for fmt in &["plain", "json", "csv"] {
+            cfg.set("search.format", fmt).unwrap();
+            assert_eq!(cfg.search.format.as_deref(), Some(*fmt));
+        }
+    }
+
+    #[test]
+    fn set_search_format_invalid_errors() {
+        let mut cfg = default_config();
+        assert!(cfg.set("search.format", "xml").is_err());
+    }
+
+    #[test]
+    fn set_exclude_tests() {
+        let mut cfg = default_config();
+        cfg.set("search.exclude_tests", "true").unwrap();
+        assert!(cfg.search.exclude_tests);
+    }
+
+    #[test]
+    fn set_index_auto_index() {
+        let mut cfg = default_config();
+        cfg.set("index.auto_index", "true").unwrap();
+        assert!(cfg.index.auto_index);
+    }
+
+    #[test]
+    fn set_editor_command() {
+        let mut cfg = default_config();
+        cfg.set("editor.command", "nvim").unwrap();
+        assert_eq!(cfg.editor.command.as_deref(), Some("nvim"));
+        assert_eq!(cfg.get("editor.command").unwrap(), "nvim");
+    }
+
+    #[test]
+    fn set_editor_command_auto_clears() {
+        let mut cfg = default_config();
+        cfg.set("editor.command", "nvim").unwrap();
+        cfg.set("editor.command", "auto").unwrap();
+        assert!(cfg.editor.command.is_none());
+    }
+
+    #[test]
+    fn set_editor_command_empty_clears() {
+        let mut cfg = default_config();
+        cfg.set("editor.command", "code").unwrap();
+        cfg.set("editor.command", "").unwrap();
+        assert!(cfg.editor.command.is_none());
+    }
+
+    #[test]
+    fn set_unknown_key_errors() {
+        let mut cfg = default_config();
+        assert!(cfg.set("nonexistent.key", "value").is_err());
+    }
+}
