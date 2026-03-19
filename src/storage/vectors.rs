@@ -150,6 +150,21 @@ impl VectorStore {
         self.records.is_empty()
     }
 
+    /// Retrieve and decode the stored vector for `unit_id`, or `None` if absent.
+    pub fn get_vector(&mut self, unit_id: i64) -> Result<Option<Vec<f32>>> {
+        if let Some(cached) = self.hot_cache.get(&unit_id) {
+            return Ok(Some(cached.clone()));
+        }
+        if let Some(&idx) = self.id_index.get(&unit_id) {
+            let rec = &self.records[idx];
+            let decoded = dequantize(&rec.data, rec.v_min, rec.v_max);
+            self.hot_cache.insert(unit_id, decoded.clone());
+            Ok(Some(decoded))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Brute-force cosine-similarity search.
     /// Returns up to `top_k` (unit_id, score) pairs, sorted by descending score.
     pub fn search(&mut self, query: &[f32], top_k: usize) -> Result<Vec<(i64, f32)>> {

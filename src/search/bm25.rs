@@ -74,6 +74,7 @@ fn hit_to_result(hit: Hit) -> SearchResult {
         unit,
         score: hit.score,
         snippet,
+        repo_name: None,
     }
 }
 

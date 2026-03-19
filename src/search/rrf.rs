@@ -171,6 +171,7 @@ mod tests {
             unit: CodeUnit::new("file.py", Language::Python, UnitType::Function, name, 1, 10, ""),
             score,
             snippet: String::new(),
+            repo_name: None,
         }
     }
 

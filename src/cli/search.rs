@@ -8,7 +8,8 @@ use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
 
 use crate::index;
 use crate::cli::OutputFormat;
-use crate::search::{bm25, hybrid, rrf, SearchFilter};
+use crate::repo::registry::Registry;
+use crate::search::{bm25, cross_repo, hybrid, rrf, SearchFilter};
 use crate::storage::sqlite;
 
 pub struct SearchArgs {
@@ -23,9 +24,26 @@ pub struct SearchArgs {
     pub semantic: bool,
     /// Hybrid mode: BM25 + vector + name-match (highest quality).
     pub best: bool,
+    /// Search all registered repos.
+    pub all_repos: bool,
+    /// Comma-separated repo names to search.
+    pub repos: Option<String>,
+    /// Find functions similar to the one at FILE:LINE.
+    pub find_similar: Option<String>,
 }
 
 pub fn run(args: SearchArgs) -> Result<()> {
+    // ── find-similar mode ────────────────────────────────────────────────────
+    if let Some(ref loc) = args.find_similar {
+        return run_find_similar(&args, loc);
+    }
+
+    // ── cross-repo mode ──────────────────────────────────────────────────────
+    if args.all_repos || args.repos.is_some() {
+        return run_cross_repo(&args);
+    }
+
+    // ── single-repo mode ─────────────────────────────────────────────────────
     let root = args.path.canonicalize().context("path not found")?;
     let idx_dir = index::index_dir(&root)?;
     let tantivy_dir = idx_dir.join("tantivy");
@@ -85,6 +103,128 @@ pub fn run(args: SearchArgs) -> Result<()> {
     }
 }
 
+// ─── Cross-repo helpers ───────────────────────────────────────────────────────
+
+fn run_cross_repo(args: &SearchArgs) -> Result<()> {
+    let registry = Registry::load()?;
+    let entries: Vec<&crate::repo::registry::RepoEntry> = if args.all_repos {
+        registry.repos.iter().collect()
+    } else {
+        registry.resolve_names(args.repos.as_deref().unwrap_or(""))?
+    };
+
+    if entries.is_empty() {
+        bail!("No repos selected. Register repos with `codesearch repos add`.");
+    }
+
+    let hits = cross_repo::search_repos(&entries, &args.query, args.limit, &args.filter, None)?;
+
+    if hits.is_empty() {
+        eprintln!("No results for {:?}", args.query);
+        return Ok(());
+    }
+
+    match &args.format {
+        Some(OutputFormat::Json) => {
+            let records: Vec<serde_json::Value> = hits
+                .iter()
+                .enumerate()
+                .map(|(i, (repo, r))| {
+                    serde_json::json!({
+                        "rank": i + 1,
+                        "repo": repo,
+                        "score": r.score,
+                        "name": r.unit.name,
+                        "unit_type": r.unit.unit_type.to_string(),
+                        "language": r.unit.language.to_string(),
+                        "file_path": r.unit.file_path,
+                        "line_start": r.unit.line_start,
+                    })
+                })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&records)?);
+        }
+        Some(OutputFormat::Csv) => {
+            println!("rank,repo,score,name,unit_type,language,file_path,line_start");
+            for (i, (repo, r)) in hits.iter().enumerate() {
+                println!(
+                    "{},{},{:.4},{},{},{},{},{}",
+                    i + 1,
+                    csv_escape(repo),
+                    r.score,
+                    csv_escape(&r.unit.name),
+                    r.unit.unit_type,
+                    r.unit.language,
+                    csv_escape(&r.unit.file_path),
+                    r.unit.line_start,
+                );
+            }
+        }
+        _ => {
+            for (i, (repo, r)) in hits.iter().enumerate() {
+                println!(
+                    "\n{rank}. [{score:.2}] \x1b[2m[{repo}]\x1b[0m {unit_type} \x1b[1m{name}\x1b[0m",
+                    rank = i + 1,
+                    score = r.score,
+                    unit_type = r.unit.unit_type,
+                    name = r.unit.name,
+                );
+                println!(
+                    "   \x1b[2m{file}:{line}\x1b[0m   [{lang}]",
+                    file = r.unit.file_path,
+                    line = r.unit.line_start,
+                    lang = r.unit.language,
+                );
+            }
+            println!();
+        }
+    }
+    Ok(())
+}
+
+fn run_find_similar(args: &SearchArgs, loc: &str) -> Result<()> {
+    let (file_path, line) = parse_file_line(loc)?;
+    let root = args.path.canonicalize().context("path not found")?;
+    let registry = Registry::load()?;
+
+    let hits = cross_repo::find_similar(&registry, &root, &file_path, line, args.limit)?;
+
+    if hits.is_empty() {
+        eprintln!("No similar functions found.");
+        return Ok(());
+    }
+
+    println!("Functions similar to {}:{line}:", file_path);
+    for (i, (repo, r)) in hits.iter().enumerate() {
+        println!(
+            "\n{rank}. [{score:.4}] \x1b[2m[{repo}]\x1b[0m {unit_type} \x1b[1m{name}\x1b[0m",
+            rank = i + 1,
+            score = r.score,
+            unit_type = r.unit.unit_type,
+            name = r.unit.name,
+        );
+        println!(
+            "   \x1b[2m{file}:{line}\x1b[0m   [{lang}]",
+            file = r.unit.file_path,
+            line = r.unit.line_start,
+            lang = r.unit.language,
+        );
+    }
+    println!();
+    Ok(())
+}
+
+fn parse_file_line(loc: &str) -> Result<(String, usize)> {
+    if let Some((file, line_str)) = loc.rsplit_once(':') {
+        let line: usize = line_str
+            .parse()
+            .with_context(|| format!("invalid line number in '{loc}'"))?;
+        Ok((file.to_string(), line))
+    } else {
+        bail!("--find-similar requires FILE:LINE format (e.g. src/auth.py:42)");
+    }
+}
+
 // ─── Plain text ───────────────────────────────────────────────────────────────
 
 fn output_plain(
@@ -105,8 +245,13 @@ fn output_plain(
 
     for (i, result) in results.iter().enumerate() {
         let unit = &result.unit;
+        let repo_tag = result
+            .repo_name
+            .as_deref()
+            .map(|r| format!(" \x1b[2m[{r}]\x1b[0m"))
+            .unwrap_or_default();
         println!(
-            "\n{rank}. [{score:.2}] {unit_type} \x1b[1m{name}\x1b[0m",
+            "\n{rank}. [{score:.2}]{repo_tag} {unit_type} \x1b[1m{name}\x1b[0m",
             rank = i + 1,
             score = result.score,
             unit_type = unit.unit_type,
@@ -170,6 +315,7 @@ fn output_json(results: &[crate::types::SearchResult]) -> Result<()> {
         .map(|(i, r)| {
             serde_json::json!({
                 "rank": i + 1,
+                "repo": r.repo_name,
                 "score": r.score,
                 "name": r.unit.name,
                 "unit_type": r.unit.unit_type.to_string(),

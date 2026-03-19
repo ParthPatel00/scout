@@ -193,4 +193,7 @@ pub struct SearchResult {
     pub unit: CodeUnit,
     pub score: f32,
     pub snippet: String,
+    /// Set for cross-repo results; None for single-repo searches.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_name: Option<String>,
 }

@@ -1,4 +1,5 @@
 pub mod bm25;
+pub mod cross_repo;
 pub mod hybrid;
 pub mod rrf;
 

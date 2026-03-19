@@ -2,6 +2,7 @@ pub mod daemon;
 pub mod index;
 pub mod maintenance;
 pub mod report;
+pub mod repos;
 pub mod search;
 
 use clap::ValueEnum;

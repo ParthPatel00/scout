@@ -1,6 +1,7 @@
 mod cli;
 mod index;
 mod ml;
+mod repo;
 mod search;
 mod storage;
 mod tui;
@@ -93,6 +94,24 @@ enum Command {
         /// Hybrid mode: BM25 + vector + name-match (highest quality, requires model).
         #[arg(long)]
         best: bool,
+
+        /// Search across all registered repos.
+        #[arg(long)]
+        all_repos: bool,
+
+        /// Search specific registered repos (comma-separated names, e.g. backend,frontend).
+        #[arg(long)]
+        repos: Option<String>,
+
+        /// Find functions similar to the one at FILE:LINE (e.g. src/auth.py:42).
+        #[arg(long, value_name = "FILE:LINE")]
+        find_similar: Option<String>,
+    },
+
+    /// Manage registered repositories for cross-repo search.
+    Repos {
+        #[command(subcommand)]
+        action: ReposCommand,
     },
 
     /// Generate reports about the codebase.
@@ -173,6 +192,25 @@ enum ReportCommand {
     UnusedFunctions,
 }
 
+#[derive(Subcommand)]
+enum ReposCommand {
+    /// Register a repository for cross-repo search.
+    Add {
+        /// Short name for this repo (e.g. backend, frontend).
+        name: String,
+        /// Path to the repository root.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// List all registered repositories.
+    List,
+    /// Unregister a repository.
+    Remove {
+        /// Name of the repo to remove.
+        name: String,
+    },
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -197,6 +235,9 @@ fn main() -> Result<()> {
             no_tui,
             semantic,
             best,
+            all_repos,
+            repos,
+            find_similar,
         } => {
             let modified_since = modified_last
                 .map(|days| chrono::Utc::now().timestamp() - (days as i64 * 86_400));
@@ -207,10 +248,12 @@ fn main() -> Result<()> {
                 exclude_tests,
             };
 
-            // Decide output mode: TUI when stdout is a terminal and no override flags.
             let use_tui = !no_tui
                 && format.is_none()
                 && !show_context
+                && find_similar.is_none()
+                && !all_repos
+                && repos.is_none()
                 && std::io::stdout().is_terminal();
 
             cli::search::run(cli::search::SearchArgs {
@@ -223,8 +266,22 @@ fn main() -> Result<()> {
                 use_tui,
                 semantic,
                 best,
+                all_repos,
+                repos,
+                find_similar,
             })?;
         }
+        Command::Repos { action } => match action {
+            ReposCommand::Add { name, path } => {
+                cli::repos::add(cli::repos::AddArgs { name, path })?;
+            }
+            ReposCommand::List => {
+                cli::repos::list(cli::repos::ListArgs)?;
+            }
+            ReposCommand::Remove { name } => {
+                cli::repos::remove(cli::repos::RemoveArgs { name })?;
+            }
+        },
         Command::Report { path, kind } => {
             let report_kind = match kind {
                 ReportCommand::UnusedFunctions => cli::report::ReportKind::UnusedFunctions,

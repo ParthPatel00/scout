@@ -283,6 +283,36 @@ pub fn unused_functions(conn: &Connection) -> Result<Vec<(String, String, usize,
     Ok(rows)
 }
 
+/// Find the code unit whose range contains `line` in `file_path`.
+pub fn unit_at_line(conn: &Connection, file_path: &str, line: usize) -> Option<CodeUnit> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, file_path, language, unit_type, name, full_signature, docstring,
+                    line_start, line_end, body, parameters, return_type,
+                    calls, imports, complexity, has_embedding, embedding_model
+             FROM code_units
+             WHERE file_path = ?1 AND line_start <= ?2 AND line_end >= ?2
+             ORDER BY (line_end - line_start) ASC
+             LIMIT 1",
+        )
+        .ok()?;
+    stmt.query_row(rusqlite::params![file_path, line as i64], row_to_unit)
+        .ok()
+}
+
+/// Load a single code unit by its row ID.
+pub fn unit_by_id(conn: &Connection, id: i64) -> Option<CodeUnit> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, file_path, language, unit_type, name, full_signature, docstring,
+                    line_start, line_end, body, parameters, return_type,
+                    calls, imports, complexity, has_embedding, embedding_model
+             FROM code_units WHERE id = ?1",
+        )
+        .ok()?;
+    stmt.query_row(rusqlite::params![id], row_to_unit).ok()
+}
+
 /// Count total code units.
 pub fn count_units(conn: &Connection) -> Result<usize> {
     let n: i64 = conn.query_row("SELECT COUNT(*) FROM code_units", [], |r| r.get(0))?;

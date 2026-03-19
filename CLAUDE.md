@@ -101,7 +101,7 @@ codesearch optimize/cleanup/rebuild       # Index maintenance
 
 ## Implementation Plan
 
-**Current Phase: Phase 8 — Cross-Repo & Storage Optimization**
+**Current Phase: Phase 9 — Cloud AI & Security**
 
 Full plan with testing guidelines and success criteria: `IMPLEMENTATION_PLAN.md`
 
@@ -114,7 +114,7 @@ Full plan with testing guidelines and success criteria: `IMPLEMENTATION_PLAN.md`
 | 5 | Production Hardening | Concurrency, corruption recovery, migration | ✅ Complete |
 | 6 | Daemon & File Watching | Background indexing, incremental updates, git hooks | ✅ Complete |
 | 7 | Local AI Embeddings | Candle + UniXcoder, vector DB (IVF+PQ), hybrid search | ✅ Complete |
-| 8 | Cross-Repo & Storage | Multi-repo registry, deduplication, compression | ⬜ Not started |
+| 8 | Cross-Repo & Storage | Multi-repo registry, deduplication, compression | ✅ Complete |
 | 9 | Cloud AI & Security | Voyage/OpenAI APIs, OS keychain, rate limiting, CI matrix | ⬜ Not started |
 
 ### Planned Source Layout
