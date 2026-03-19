@@ -8,7 +8,7 @@ use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
 
 use crate::index;
 use crate::cli::OutputFormat;
-use crate::search::{bm25, rrf, SearchFilter};
+use crate::search::{bm25, hybrid, rrf, SearchFilter};
 use crate::storage::sqlite;
 
 pub struct SearchArgs {
@@ -19,12 +19,17 @@ pub struct SearchArgs {
     pub show_context: bool,
     pub format: Option<OutputFormat>,
     pub use_tui: bool,
+    /// Use semantic (vector) search only.
+    pub semantic: bool,
+    /// Hybrid mode: BM25 + vector + name-match (highest quality).
+    pub best: bool,
 }
 
 pub fn run(args: SearchArgs) -> Result<()> {
     let root = args.path.canonicalize().context("path not found")?;
     let idx_dir = index::index_dir(&root)?;
     let tantivy_dir = idx_dir.join("tantivy");
+    let vector_path = idx_dir.join("vectors.bin");
 
     if !tantivy_dir.join("meta.json").exists() {
         bail!(
@@ -33,8 +38,35 @@ pub fn run(args: SearchArgs) -> Result<()> {
         );
     }
 
-    let bm25_results = bm25::search(&tantivy_dir, &args.query, args.limit, &args.filter)?;
-    let results = rrf::fuse(&args.query, bm25_results);
+    let use_vectors = args.semantic || args.best;
+    let model: Option<Box<dyn crate::ml::EmbeddingModel>> = if use_vectors {
+        match crate::ml::model::load_model() {
+            Ok(m) => Some(m),
+            Err(e) => {
+                eprintln!("warning: could not load embedding model ({e}), falling back to BM25");
+                if !crate::ml::model::is_model_downloaded() {
+                    crate::ml::model::print_download_instructions();
+                }
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let results = if use_vectors {
+        hybrid::search(
+            &tantivy_dir,
+            &vector_path,
+            &args.query,
+            args.limit,
+            &args.filter,
+            model.as_deref(),
+        )?
+    } else {
+        let bm25_results = bm25::search(&tantivy_dir, &args.query, args.limit, &args.filter)?;
+        rrf::fuse(&args.query, bm25_results)
+    };
 
     if results.is_empty() {
         eprintln!("No results for {:?}", args.query);

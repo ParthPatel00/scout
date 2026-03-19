@@ -1,19 +1,20 @@
-/// Reciprocal Rank Fusion implementation for Phase 3.
+/// Reciprocal Rank Fusion — combines multiple ranked lists.
 ///
-/// Combines two ranked lists:
-///   1. BM25 results from Tantivy
-///   2. Name-match results (exact/prefix/fuzzy on the unit name)
-///
-/// Formula: RRF(d) = Σ 1 / (k + rank_k(d)), k = 60
+/// Phase 3: BM25 + name-match (K_BM25=60, K_NAME=5)
+/// Phase 7: adds vector-similarity component (K_VEC=60)
+
+use std::collections::HashMap;
 
 use strsim::jaro_winkler;
 
 use crate::types::SearchResult;
 
-/// Standard RRF constant for the BM25 component.
+/// Standard RRF constant for the BM25 and vector components.
 const K_BM25: f32 = 60.0;
 /// Smaller K for name-match so exact/prefix matches strongly outweigh position.
 const K_NAME: f32 = 5.0;
+/// RRF constant for the vector-similarity component.
+const K_VEC: f32 = 60.0;
 
 /// Fuse `bm25_results` (already ranked) with name-match re-ranking and return
 /// a new ranked list. Results not in either list are dropped.
@@ -65,6 +66,68 @@ pub fn fuse(query: &str, bm25_results: Vec<SearchResult>) -> Vec<SearchResult> {
         .collect();
 
     // Zero out old results to avoid using moved values.
+    drop(results);
+    reordered
+}
+
+/// Three-component RRF: BM25 + name-match + vector similarity.
+///
+/// `vector_hits` is a list of (unit_id, cosine_score) from the vector store,
+/// pre-sorted by descending score.  Results absent from the vector list get
+/// the worst possible vector rank (= len(bm25_results)).
+pub fn fuse_hybrid(
+    query: &str,
+    bm25_results: Vec<SearchResult>,
+    vector_hits: Vec<(i64, f32)>,
+) -> Vec<SearchResult> {
+    if bm25_results.is_empty() {
+        return bm25_results;
+    }
+
+    // Build id → vector rank mapping.
+    let vec_rank_map: HashMap<i64, usize> = vector_hits
+        .iter()
+        .enumerate()
+        .map(|(rank, (id, _))| (*id, rank))
+        .collect();
+    let default_vec_rank = bm25_results.len(); // worst rank for missing entries
+
+    // Name-match ranking (same logic as fuse()).
+    let mut name_scores: Vec<(usize, f32)> = bm25_results
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (i, name_match_score(query, &r.unit.name)))
+        .collect();
+    name_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let mut name_rank = vec![0usize; bm25_results.len()];
+    for (rank, (idx, _)) in name_scores.iter().enumerate() {
+        name_rank[*idx] = rank;
+    }
+
+    let mut scored: Vec<(usize, f32)> = bm25_results
+        .iter()
+        .enumerate()
+        .map(|(bm25_rank, r)| {
+            let nm_rank = name_rank[bm25_rank];
+            let vec_rank = *vec_rank_map.get(&r.unit.id).unwrap_or(&default_vec_rank);
+            let rrf = 1.0 / (K_BM25 + bm25_rank as f32 + 1.0)
+                + 1.0 / (K_NAME + nm_rank as f32 + 1.0)
+                + 1.0 / (K_VEC + vec_rank as f32 + 1.0);
+            (bm25_rank, rrf)
+        })
+        .collect();
+
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut results = bm25_results;
+    let reordered: Vec<SearchResult> = scored
+        .into_iter()
+        .map(|(orig_idx, rrf_score)| {
+            let mut r = results[orig_idx].clone();
+            r.score = rrf_score * 1000.0;
+            r
+        })
+        .collect();
     drop(results);
     reordered
 }

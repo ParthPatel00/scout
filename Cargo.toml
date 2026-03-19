@@ -13,6 +13,10 @@ local-models = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "
 cloud-models = ["dep:reqwest"]
 full = ["local-models", "cloud-models"]
 
+[profile.release]
+opt-level = 3
+lto = true
+
 [dependencies]
 # CLI & async
 clap = { version = "4.5", features = ["derive"] }
@@ -56,9 +60,9 @@ crossterm = "0.27"
 syntect = "5.2"
 indicatif = "0.17"
 
-# Compression (Phase 7+)
-zstd = { version = "0.13", optional = true }
-memmap2 = { version = "0.9", optional = true }
+# Compression & memory-mapped I/O (vector store)
+zstd = "0.13"
+memmap2 = "0.9"
 
 # ML (Phase 7, local-models feature)
 candle-core = { version = "0.4", optional = true }

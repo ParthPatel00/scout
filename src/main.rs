@@ -1,5 +1,6 @@
 mod cli;
 mod index;
+mod ml;
 mod search;
 mod storage;
 mod tui;
@@ -37,6 +38,10 @@ enum Command {
         /// Show each file as it is parsed.
         #[arg(short, long)]
         verbose: bool,
+
+        /// Print instructions for downloading the UniXcoder embedding model.
+        #[arg(long)]
+        download_model: bool,
     },
 
     /// Search the index (BM25 + RRF re-ranking). Launches TUI when in a terminal.
@@ -80,6 +85,14 @@ enum Command {
         /// Always use plain-text output, never launch the TUI.
         #[arg(long)]
         no_tui: bool,
+
+        /// Use semantic (vector embedding) search only.
+        #[arg(long)]
+        semantic: bool,
+
+        /// Hybrid mode: BM25 + vector + name-match (highest quality, requires model).
+        #[arg(long)]
+        best: bool,
     },
 
     /// Generate reports about the codebase.
@@ -164,7 +177,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Index { path, verbose } => {
+        Command::Index { path, verbose, download_model } => {
+            if download_model {
+                ml::model::print_download_instructions();
+                return Ok(());
+            }
             cli::index::run(cli::index::IndexArgs { path, verbose })?;
         }
         Command::Search {
@@ -178,6 +195,8 @@ fn main() -> Result<()> {
             show_context,
             format,
             no_tui,
+            semantic,
+            best,
         } => {
             let modified_since = modified_last
                 .map(|days| chrono::Utc::now().timestamp() - (days as i64 * 86_400));
@@ -202,6 +221,8 @@ fn main() -> Result<()> {
                 show_context,
                 format,
                 use_tui,
+                semantic,
+                best,
             })?;
         }
         Command::Report { path, kind } => {

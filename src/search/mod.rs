@@ -1,4 +1,5 @@
 pub mod bm25;
+pub mod hybrid;
 pub mod rrf;
 
 /// Filters applied to search results.
