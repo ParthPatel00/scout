@@ -128,6 +128,22 @@ pub fn run(args: SearchArgs) -> Result<()> {
 
     // Launch TUI when in a terminal with no format override.
     if args.use_tui {
+        // BM25/hybrid search builds CodeUnits without body (Tantivy doesn't store it).
+        // Enrich each result's body from SQLite before handing to TUI so the preview
+        // pane shows the full function source, not just the signature line.
+        let db_path = index::db_path(&idx_dir);
+        let conn = sqlite::open(&db_path)?;
+        let results = results
+            .into_iter()
+            .map(|mut r| {
+                if r.unit.body.is_empty() && r.unit.id > 0 {
+                    if let Some(full) = sqlite::unit_by_id(&conn, r.unit.id) {
+                        r.unit.body = full.body;
+                    }
+                }
+                r
+            })
+            .collect::<Vec<_>>();
         return crate::tui::run(args.query, results, root, args.editor_cmd.clone());
     }
 
