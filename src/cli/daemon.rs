@@ -127,21 +127,24 @@ pub fn stop(args: StopArgs) -> Result<()> {
     let root = args.path.canonicalize().context("path not found")?;
     let idx_dir = index::index_dir(&root)?;
 
-    let state = read_state(&idx_dir)
-        .filter(|s| is_running(s.pid))
-        .ok_or_else(|| anyhow::anyhow!("No daemon is running for this repository."))?;
-
-    #[cfg(unix)]
-    unsafe {
-        libc::kill(state.pid as libc::pid_t, libc::SIGTERM);
-    }
     #[cfg(not(unix))]
     {
+        let _ = &idx_dir;
         bail!("Stopping the daemon is not supported on this platform.");
     }
 
-    remove_state(&idx_dir);
-    println!("Daemon stopped (PID {}).", state.pid);
+    #[cfg(unix)]
+    {
+        let state = read_state(&idx_dir)
+            .filter(|s| is_running(s.pid))
+            .ok_or_else(|| anyhow::anyhow!("No daemon is running for this repository."))?;
+        unsafe {
+            libc::kill(state.pid as libc::pid_t, libc::SIGTERM);
+        }
+        remove_state(&idx_dir);
+        println!("Daemon stopped (PID {}).", state.pid);
+    }
+
     Ok(())
 }
 
