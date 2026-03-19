@@ -83,7 +83,7 @@ pub fn run() -> Result<()> {
 
     let sem_opts = [
         "Yes — download the model now  (~350 MB)",
-        "Yes — I'll download it later with `scout index --download-model`",
+        "Yes — download in the background (scout will fetch it automatically)",
         "No  — keyword search is fine for now",
     ];
     let sem_idx = Select::with_theme(&theme)
@@ -99,7 +99,7 @@ pub fn run() -> Result<()> {
     let editor_idx = Select::with_theme(&theme)
         .with_prompt("Editor for opening results")
         .items(&editor_items)
-        .default(1) // VS Code as default
+        .default(if detected.is_some() { 0 } else { 1 })
         .interact()?;
 
     cfg.editor.command = match editor_idx {
@@ -159,13 +159,12 @@ pub fn run() -> Result<()> {
         config_path().display()
     );
 
-    // ── Act on deferred choices ───────────────────────────────────────────────
+    // ── Act on all choices — the tool does everything ─────────────────────────
 
-    // Daemon / git hooks setup — also run an initial index first so there is
-    // something for the daemon/hooks to keep fresh.
+    // Index + daemon/hooks
     if fresh_idx == 1 || fresh_idx == 2 {
         let cwd = std::env::current_dir()?;
-        println!("\n  Building the initial index for {} …", cwd.display());
+        println!("  Building the initial index for {} …", cwd.display());
         crate::cli::index::run(crate::cli::index::IndexArgs {
             path: cwd.clone(),
             verbose: false,
@@ -189,37 +188,124 @@ pub fn run() -> Result<()> {
         let _ = crate::cli::repos::add(crate::cli::repos::AddArgs { name, path });
     }
 
-    // Shell completions instructions
+    // Shell completions — install automatically
     if shell_idx > 0 {
         let shell = ["", "zsh", "bash", "fish"][shell_idx];
-        print_completion_instructions(shell);
+        install_completions(shell);
     }
 
-    // Semantic model download
+    // Semantic model — download now or in background
     match sem_idx {
         0 => {
-            println!();
             if model::is_model_downloaded() {
-                println!("\x1b[32m✓\x1b[0m Model already downloaded.");
+                println!("\x1b[32m✓\x1b[0m Model already present — semantic search ready.");
             } else {
-                model::print_download_instructions();
+                println!("\n  Downloading UniXcoder model (~350 MB) …");
+                if let Err(e) = model::download_model() {
+                    println!("\x1b[33m⚠\x1b[0m  Download failed: {e}");
+                    println!("    You can retry later with: \x1b[1mscout index --download-model\x1b[0m");
+                }
             }
         }
         1 => {
-            println!(
-                "\n  When ready: \x1b[1mscout index --download-model\x1b[0m"
-            );
+            // Spawn background download via the daemon if it's running,
+            // otherwise spawn a detached process.
+            println!("\n  Queuing model download in background …");
+            let dest = model::model_dir();
+            let _ = std::process::Command::new(std::env::current_exe().unwrap_or_else(|_| PathBuf::from("scout")))
+                .args(["index", "--download-model"])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
+            println!("  \x1b[2mModel will be saved to {}\x1b[0m", dest.display());
         }
-        _ => {}
+        _ => {} // user declined
     }
 
     // ── Summary ───────────────────────────────────────────────────────────────
-    println!("\n\x1b[1mAll set!\x1b[0m  Next steps:\n");
-    println!("  1. Index your codebase:    \x1b[1mscout index\x1b[0m");
-    println!("  2. Search it:              \x1b[1mscout \"authentication logic\"\x1b[0m");
-    println!("  3. View / change settings: \x1b[1mscout config list\x1b[0m\n");
+    println!("\n\x1b[1;32mAll set!\x1b[0m  Scout is ready.\n");
+    println!("  Search:                    \x1b[1mscout \"authentication logic\"\x1b[0m");
+    println!("  View / change settings:    \x1b[1mscout config list\x1b[0m\n");
 
     Ok(())
+}
+
+/// Install shell completions and add the source line to the user's rc file.
+fn install_completions(shell: &str) {
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => { println!("  \x1b[33m⚠\x1b[0m  Could not determine home directory."); return; }
+    };
+
+    let (comp_dir, filename, rc_file, source_line): (PathBuf, &str, Option<PathBuf>, &str) = match shell {
+        "zsh" => (
+            home.join(".zsh").join("completions"),
+            "_scout",
+            Some(home.join(".zshrc")),
+            "fpath=(~/.zsh/completions $fpath)\nautoload -Uz compinit && compinit",
+        ),
+        "bash" => (
+            home.join(".bash_completions"),
+            "scout",
+            Some(home.join(".bashrc")),
+            "source ~/.bash_completions/scout",
+        ),
+        "fish" => (
+            home.join(".config").join("fish").join("completions"),
+            "scout.fish",
+            None,
+            "",
+        ),
+        _ => return,
+    };
+
+    if let Err(e) = std::fs::create_dir_all(&comp_dir) {
+        println!("  \x1b[33m⚠\x1b[0m  Could not create {}: {e}", comp_dir.display());
+        return;
+    }
+
+    let comp_file = comp_dir.join(filename);
+
+    // Generate completions by running `scout completions <shell>` as a subprocess.
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("scout"));
+    match std::process::Command::new(&exe).args(["completions", shell]).output() {
+        Ok(out) if out.status.success() => {
+            if let Err(e) = std::fs::write(&comp_file, &out.stdout) {
+                println!("  \x1b[33m⚠\x1b[0m  Could not write {}: {e}", comp_file.display());
+                return;
+            }
+            println!("  \x1b[32m✓\x1b[0m {shell} completions installed → {}", comp_file.display());
+        }
+        Ok(out) => {
+            println!("  \x1b[33m⚠\x1b[0m  Completion generation failed: {}", String::from_utf8_lossy(&out.stderr));
+            return;
+        }
+        Err(e) => {
+            println!("  \x1b[33m⚠\x1b[0m  Could not run scout completions: {e}");
+            return;
+        }
+    }
+
+    // Append source line to rc file if not already present
+    if let Some(rc) = rc_file {
+        if !source_line.is_empty() {
+            let existing = std::fs::read_to_string(&rc).unwrap_or_default();
+            if !existing.contains(source_line.lines().next().unwrap_or("")) {
+                let append = format!("\n# scout completions\n{source_line}\n");
+                if let Err(e) = {
+                    use std::io::Write;
+                    std::fs::OpenOptions::new().append(true).create(true).open(&rc)
+                        .and_then(|mut f| f.write_all(append.as_bytes()))
+                } {
+                    println!("  \x1b[33m⚠\x1b[0m  Could not update {}: {e}", rc.display());
+                } else {
+                    println!("  \x1b[32m✓\x1b[0m  Completions sourced from {} (restart shell to activate)", rc.display());
+                }
+            }
+            // already present — no noise needed
+        }
+    }
 }
 
 fn build_editor_choices(detected: &Option<String>) -> Vec<String> {
@@ -239,21 +325,4 @@ fn build_editor_choices(detected: &Option<String>) -> Vec<String> {
         "nano   — Nano".to_string(),
         "Other  — enter path".to_string(),
     ]
-}
-
-fn print_completion_instructions(shell: &str) {
-    println!("\n  Shell completions ({shell}):");
-    match shell {
-        "zsh" => println!(
-            "    scout completions zsh > ~/.zsh/completions/_scout\n\n    Then add to ~/.zshrc:\n\n    fpath=(~/.zsh/completions $fpath)\n    autoload -Uz compinit && compinit"
-        ),
-        "bash" => println!(
-            "    scout completions bash > ~/.bash_completions/scout\n\n    Then add to ~/.bashrc:\n\n    source ~/.bash_completions/scout"
-        ),
-        "fish" => println!(
-            "    scout completions fish > ~/.config/fish/completions/scout.fish"
-        ),
-        _ => {}
-    }
-    println!();
 }

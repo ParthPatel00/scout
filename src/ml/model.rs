@@ -23,7 +23,82 @@ pub fn is_model_downloaded() -> bool {
     model_dir().join("config.json").exists()
 }
 
-/// Print instructions for obtaining the UniXcoder model weights.
+/// Download the UniXcoder model weights from HuggingFace.
+///
+/// Downloads only the files required for inference and shows a progress
+/// indicator. Skips files that are already present on disk.
+pub fn download_model() -> Result<()> {
+    use indicatif::{ProgressBar, ProgressStyle};
+
+    let dest = model_dir();
+    std::fs::create_dir_all(&dest)?;
+
+    // Files required for inference — ordered smallest → largest so feedback
+    // appears immediately before the long weights download begins.
+    let files: &[(&str, &str)] = &[
+        ("tokenizer_config.json", "tokenizer_config.json"),
+        ("special_tokens_map.json", "special_tokens_map.json"),
+        ("config.json",            "config.json"),
+        ("vocab.json",             "vocab.json"),
+        ("merges.txt",             "merges.txt"),
+        ("tokenizer.json",         "tokenizer.json"),
+        ("pytorch_model.bin",      "pytorch_model.bin"),
+    ];
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(600))
+        .build()?;
+
+    let base_url = format!("https://huggingface.co/{MODEL_ID}/resolve/main");
+
+    for (remote, local) in files {
+        let out = dest.join(local);
+        if out.exists() {
+            println!("  \x1b[2m{local} already present, skipping\x1b[0m");
+            continue;
+        }
+
+        let url = format!("{base_url}/{remote}");
+        let resp = client.get(&url).send()?;
+        if !resp.status().is_success() {
+            // Some models omit merges.txt — skip gracefully.
+            if resp.status().as_u16() == 404 {
+                continue;
+            }
+            anyhow::bail!("Download failed for {remote}: HTTP {}", resp.status());
+        }
+
+        let total = resp.content_length().unwrap_or(0);
+        let pb = ProgressBar::new(total);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("  {msg:25} [{bar:40.cyan/blue}] {bytes}/{total_bytes}")?
+                .progress_chars("=>-"),
+        );
+        pb.set_message(local.to_string());
+
+        let mut file = std::fs::File::create(&out)?;
+        let mut downloaded: u64 = 0;
+        let mut reader = resp;
+        loop {
+            use std::io::Read;
+            let mut buf = vec![0u8; 65536];
+            let n = reader.read(&mut buf)?;
+            if n == 0 { break; }
+            use std::io::Write;
+            file.write_all(&buf[..n])?;
+            downloaded += n as u64;
+            pb.set_position(downloaded);
+        }
+        pb.finish_and_clear();
+        println!("  \x1b[32m✓\x1b[0m {local}");
+    }
+
+    println!("\x1b[32m✓\x1b[0m Model downloaded to {}", dest.display());
+    Ok(())
+}
+
+/// Print instructions for obtaining the UniXcoder model weights (fallback).
 pub fn print_download_instructions() {
     let path = model_dir();
     eprintln!("To enable semantic search, download the UniXcoder model (~350 MB):");

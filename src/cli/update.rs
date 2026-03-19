@@ -154,6 +154,91 @@ fn is_newer(candidate: &str, current: &str) -> bool {
     parse(candidate) > parse(current)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── is_newer ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn newer_patch_version() {
+        assert!(is_newer("1.0.1", "1.0.0"));
+    }
+
+    #[test]
+    fn newer_minor_version() {
+        assert!(is_newer("1.1.0", "1.0.9"));
+    }
+
+    #[test]
+    fn newer_major_version() {
+        assert!(is_newer("2.0.0", "1.9.9"));
+    }
+
+    #[test]
+    fn same_version_is_not_newer() {
+        assert!(!is_newer("1.0.0", "1.0.0"));
+    }
+
+    #[test]
+    fn older_patch_is_not_newer() {
+        assert!(!is_newer("1.0.0", "1.0.1"));
+    }
+
+    #[test]
+    fn older_minor_is_not_newer() {
+        assert!(!is_newer("1.0.5", "1.1.0"));
+    }
+
+    #[test]
+    fn older_major_is_not_newer() {
+        assert!(!is_newer("1.9.9", "2.0.0"));
+    }
+
+    #[test]
+    fn is_newer_handles_missing_parts() {
+        // Partial versions should degrade gracefully (missing parts treated as 0).
+        assert!(is_newer("1.1", "1.0.0")); // "1.1.0" > "1.0.0"
+        assert!(!is_newer("1.0", "1.0.1")); // "1.0.0" < "1.0.1"
+    }
+
+    #[test]
+    fn is_newer_handles_invalid_string_as_zero() {
+        // Non-numeric parts parse to 0 — should not panic.
+        assert!(!is_newer("abc", "1.0.0")); // 0.0.0 < 1.0.0
+    }
+
+    #[test]
+    fn is_newer_large_numbers() {
+        assert!(is_newer("10.0.0", "9.99.99"));
+    }
+
+    // ── current_target ────────────────────────────────────────────────────────
+
+    #[test]
+    fn current_target_is_non_empty() {
+        let t = current_target();
+        assert!(!t.is_empty());
+    }
+
+    #[test]
+    fn current_target_is_known_platform() {
+        let known = &[
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+            "x86_64-pc-windows-msvc",
+            "unknown",
+        ];
+        assert!(
+            known.contains(&current_target()),
+            "unexpected target: {}",
+            current_target()
+        );
+    }
+}
+
 fn current_target() -> &'static str {
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         "aarch64-apple-darwin"

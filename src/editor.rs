@@ -27,13 +27,16 @@ pub fn open_with(
     };
 
     match editor {
-        Editor::VSCode => {
+        Editor::VSCode(bin) => {
             // VS Code / Cursor: non-blocking GUI app.
-            std::process::Command::new("code")
+            // On macOS, `code`/`cursor` may not be in PATH even when the app is installed.
+            // vscode_binary() falls back to the well-known app bundle path.
+            let cmd = vscode_binary(&bin);
+            std::process::Command::new(&cmd)
                 .args(["--goto", &format!("{abs_str}:{line}")])
                 .spawn()
                 .map(|_| ())
-                .map_err(|e| anyhow::anyhow!("Failed to launch VS Code: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Failed to launch {bin}: {e}\n  Tip: install the CLI via the app command palette → \"Install 'code' command in PATH\""))?;
         }
         Editor::Zed => {
             std::process::Command::new("zed")
@@ -96,7 +99,7 @@ pub fn detect_name() -> Option<String> {
 // ─── Detection ────────────────────────────────────────────────────────────────
 
 enum Editor {
-    VSCode,
+    VSCode(String), // stores the command basename ("code" or "cursor")
     Zed,
     Helix,
     Terminal(String),
@@ -128,6 +131,27 @@ fn detect() -> Editor {
         }
     }
 
+    // macOS: VS Code/Cursor may be installed without the CLI in PATH.
+    #[cfg(target_os = "macos")]
+    for (app, label) in &[
+        ("Visual Studio Code", "code"),
+        ("Cursor", "cursor"),
+    ] {
+        let bundle = format!("/Applications/{app}.app/Contents/Resources/app/bin/code");
+        if std::path::Path::new(&bundle).exists() {
+            return classify(label.to_string());
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            let user_bundle = format!(
+                "{}/Applications/{app}.app/Contents/Resources/app/bin/code",
+                home.to_string_lossy()
+            );
+            if std::path::Path::new(&user_bundle).exists() {
+                return classify(label.to_string());
+            }
+        }
+    }
+
     Editor::None
 }
 
@@ -138,14 +162,129 @@ fn classify(cmd: String) -> Editor {
         .map(|n| n.to_string_lossy().to_lowercase())
         .unwrap_or_else(|| cmd.to_lowercase());
 
-    if base == "code" || base == "code.cmd" || base == "cursor" || base.starts_with("code-") {
-        Editor::VSCode
+    if base == "code" || base == "code.cmd" || base.starts_with("code-") {
+        Editor::VSCode("code".to_string())
+    } else if base == "cursor" {
+        Editor::VSCode("cursor".to_string())
     } else if base == "zed" {
         Editor::Zed
     } else if base == "hx" || base.contains("helix") {
         Editor::Helix
     } else {
         Editor::Terminal(cmd)
+    }
+}
+
+/// Return the best available path for a VS Code–family binary.
+///
+/// Priority:
+///   1. `cmd` is already in PATH  →  use it as-is
+///   2. macOS app-bundle CLI      →  full path inside .app
+///   3. fall back to bare `cmd`   →  will fail at spawn time with a clear message
+fn vscode_binary(cmd: &str) -> String {
+    if cmd_in_path(cmd) {
+        return cmd.to_string();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let (app_name, bin_name) = if cmd == "cursor" {
+            ("Cursor", "cursor")
+        } else {
+            ("Visual Studio Code", "code")
+        };
+        for base in &["/Applications", &format!("{}/Applications", std::env::var("HOME").unwrap_or_default())] {
+            let bundle = format!("{base}/{app_name}.app/Contents/Resources/app/bin/{bin_name}");
+            if std::path::Path::new(&bundle).exists() {
+                return bundle;
+            }
+        }
+    }
+    cmd.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── classify ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn classify_code_is_vscode_code() {
+        assert!(matches!(classify("code".to_string()), Editor::VSCode(b) if b == "code"));
+    }
+
+    #[test]
+    fn classify_code_cmd_is_vscode_code() {
+        assert!(matches!(classify("code.cmd".to_string()), Editor::VSCode(b) if b == "code"));
+    }
+
+    #[test]
+    fn classify_cursor_is_vscode_cursor() {
+        assert!(matches!(classify("cursor".to_string()), Editor::VSCode(b) if b == "cursor"));
+    }
+
+    #[test]
+    fn classify_zed_is_zed() {
+        assert!(matches!(classify("zed".to_string()), Editor::Zed));
+    }
+
+    #[test]
+    fn classify_hx_is_helix() {
+        assert!(matches!(classify("hx".to_string()), Editor::Helix));
+    }
+
+    #[test]
+    fn classify_helix_name_is_helix() {
+        assert!(matches!(classify("helix".to_string()), Editor::Helix));
+    }
+
+    #[test]
+    fn classify_nvim_is_terminal() {
+        assert!(matches!(classify("nvim".to_string()), Editor::Terminal(cmd) if cmd == "nvim"));
+    }
+
+    #[test]
+    fn classify_vim_is_terminal() {
+        assert!(matches!(classify("vim".to_string()), Editor::Terminal(cmd) if cmd == "vim"));
+    }
+
+    #[test]
+    fn classify_nano_is_terminal() {
+        assert!(matches!(classify("nano".to_string()), Editor::Terminal(cmd) if cmd == "nano"));
+    }
+
+    #[test]
+    fn classify_full_bundle_path_cursor_is_vscode_cursor() {
+        // A full path to the Cursor bundle binary should classify as VSCode("cursor").
+        let path = "/Applications/Cursor.app/Contents/Resources/app/bin/cursor".to_string();
+        assert!(matches!(classify(path), Editor::VSCode(b) if b == "cursor"));
+    }
+
+    #[test]
+    fn classify_full_bundle_path_code_is_vscode_code() {
+        let path =
+            "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code".to_string();
+        assert!(matches!(classify(path), Editor::VSCode(b) if b == "code"));
+    }
+
+    // ── vscode_binary ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn vscode_binary_falls_back_to_cmd_when_not_found() {
+        // A nonsense command will never be in PATH or any bundle path.
+        let result = vscode_binary("scout-fake-editor-xyz-99999");
+        assert_eq!(result, "scout-fake-editor-xyz-99999");
+    }
+
+    #[test]
+    fn vscode_binary_returns_cmd_when_in_path() {
+        // `true` is universally available on Unix systems.
+        // We test that when the command IS in PATH it is returned as-is (not a bundle path).
+        #[cfg(unix)]
+        {
+            let result = vscode_binary("true");
+            assert_eq!(result, "true", "command in PATH should be returned unchanged");
+        }
     }
 }
 

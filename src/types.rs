@@ -187,6 +187,183 @@ impl Default for IndexMetadata {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Language::from_extension ───────────────────────────────────────────────
+
+    #[test]
+    fn from_extension_python() {
+        assert_eq!(Language::from_extension("py"), Language::Python);
+    }
+
+    #[test]
+    fn from_extension_rust() {
+        assert_eq!(Language::from_extension("rs"), Language::Rust);
+    }
+
+    #[test]
+    fn from_extension_typescript_variants() {
+        assert_eq!(Language::from_extension("ts"), Language::TypeScript);
+        assert_eq!(Language::from_extension("tsx"), Language::TypeScript);
+    }
+
+    #[test]
+    fn from_extension_javascript_variants() {
+        assert_eq!(Language::from_extension("js"), Language::JavaScript);
+        assert_eq!(Language::from_extension("jsx"), Language::JavaScript);
+        assert_eq!(Language::from_extension("mjs"), Language::JavaScript);
+        assert_eq!(Language::from_extension("cjs"), Language::JavaScript);
+    }
+
+    #[test]
+    fn from_extension_go() {
+        assert_eq!(Language::from_extension("go"), Language::Go);
+    }
+
+    #[test]
+    fn from_extension_java() {
+        assert_eq!(Language::from_extension("java"), Language::Java);
+    }
+
+    #[test]
+    fn from_extension_cpp_variants() {
+        for ext in &["cpp", "cc", "cxx", "c", "h", "hpp"] {
+            assert_eq!(Language::from_extension(ext), Language::Cpp, "ext={ext}");
+        }
+    }
+
+    #[test]
+    fn from_extension_unknown_for_unrecognised() {
+        assert_eq!(Language::from_extension("rb"), Language::Unknown);
+        assert_eq!(Language::from_extension("swift"), Language::Unknown);
+        assert_eq!(Language::from_extension(""), Language::Unknown);
+        assert_eq!(Language::from_extension("txt"), Language::Unknown);
+    }
+
+    // ── Language::as_str / Display ────────────────────────────────────────────
+
+    #[test]
+    fn language_as_str_all_variants() {
+        assert_eq!(Language::Python.as_str(), "python");
+        assert_eq!(Language::Rust.as_str(), "rust");
+        assert_eq!(Language::TypeScript.as_str(), "typescript");
+        assert_eq!(Language::JavaScript.as_str(), "javascript");
+        assert_eq!(Language::Go.as_str(), "go");
+        assert_eq!(Language::Java.as_str(), "java");
+        assert_eq!(Language::Cpp.as_str(), "cpp");
+        assert_eq!(Language::Unknown.as_str(), "unknown");
+    }
+
+    #[test]
+    fn language_display_matches_as_str() {
+        for lang in &[
+            Language::Python,
+            Language::Rust,
+            Language::TypeScript,
+            Language::JavaScript,
+            Language::Go,
+            Language::Java,
+            Language::Cpp,
+            Language::Unknown,
+        ] {
+            assert_eq!(lang.to_string(), lang.as_str());
+        }
+    }
+
+    // ── UnitType::Display ─────────────────────────────────────────────────────
+
+    #[test]
+    fn unit_type_display_all_variants() {
+        assert_eq!(UnitType::Function.to_string(), "function");
+        assert_eq!(UnitType::Method.to_string(), "method");
+        assert_eq!(UnitType::Class.to_string(), "class");
+        assert_eq!(UnitType::Struct.to_string(), "struct");
+        assert_eq!(UnitType::Enum.to_string(), "enum");
+        assert_eq!(UnitType::Trait.to_string(), "trait");
+        assert_eq!(UnitType::Interface.to_string(), "interface");
+        assert_eq!(UnitType::Module.to_string(), "module");
+        assert_eq!(UnitType::Other("macro".into()).to_string(), "macro");
+    }
+
+    // ── CodeUnit::new ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn code_unit_new_defaults() {
+        let u = CodeUnit::new(
+            "src/auth.rs",
+            Language::Rust,
+            UnitType::Function,
+            "authenticate",
+            10,
+            25,
+            "fn authenticate() {}",
+        );
+        assert_eq!(u.id, 0);
+        assert_eq!(u.file_path, "src/auth.rs");
+        assert_eq!(u.language, Language::Rust);
+        assert_eq!(u.unit_type, UnitType::Function);
+        assert_eq!(u.name, "authenticate");
+        assert_eq!(u.line_start, 10);
+        assert_eq!(u.line_end, 25);
+        assert_eq!(u.body, "fn authenticate() {}");
+        assert!(u.full_signature.is_none());
+        assert!(u.docstring.is_none());
+        assert!(u.parameters.is_empty());
+        assert!(u.return_type.is_none());
+        assert!(u.calls.is_empty());
+        assert!(u.imports.is_empty());
+        assert_eq!(u.complexity, 1);
+        assert!(!u.has_embedding);
+        assert!(u.embedding_model.is_none());
+    }
+
+    // ── IndexMetadata::new ────────────────────────────────────────────────────
+
+    #[test]
+    fn index_metadata_new_version_is_current() {
+        let m = IndexMetadata::new();
+        assert_eq!(m.version, IndexMetadata::CURRENT_VERSION);
+    }
+
+    #[test]
+    fn index_metadata_new_starts_with_zero_counts() {
+        let m = IndexMetadata::new();
+        assert_eq!(m.num_files, 0);
+        assert_eq!(m.num_units, 0);
+        assert!(m.checksum.is_empty());
+    }
+
+    #[test]
+    fn index_metadata_default_equals_new() {
+        let a = IndexMetadata::new();
+        let b = IndexMetadata::default();
+        assert_eq!(a.version, b.version);
+        assert_eq!(a.num_files, b.num_files);
+        assert_eq!(a.num_units, b.num_units);
+    }
+
+    // ── SearchResult JSON serialization ───────────────────────────────────────
+
+    #[test]
+    fn search_result_repo_name_omitted_when_none() {
+        let unit = CodeUnit::new("f.rs", Language::Rust, UnitType::Function, "foo", 1, 5, "fn foo() {}");
+        let r = SearchResult { unit, score: 0.9, snippet: "fn foo".into(), repo_name: None };
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(!json.contains("repo_name"), "repo_name must be omitted when None: {json}");
+    }
+
+    #[test]
+    fn search_result_repo_name_present_when_some() {
+        let unit = CodeUnit::new("f.rs", Language::Rust, UnitType::Function, "foo", 1, 5, "fn foo() {}");
+        let r = SearchResult { unit, score: 0.9, snippet: "fn foo".into(), repo_name: Some("backend".into()) };
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(json.contains("repo_name"), "repo_name must be present when Some: {json}");
+        assert!(json.contains("backend"), "repo_name value must appear: {json}");
+    }
+}
+
 /// Result of a search query.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {

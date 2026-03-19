@@ -6,6 +6,7 @@ pub mod maintenance;
 pub mod report;
 pub mod repos;
 pub mod search;
+pub mod stats;
 pub mod update;
 
 use clap::ValueEnum;

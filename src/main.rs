@@ -24,7 +24,7 @@ use crate::search::SearchFilter;
 /// Known subcommand names — anything else is treated as a search query.
 const SUBCOMMANDS: &[&str] = &[
     "index", "search", "s", "repos", "report", "rebuild", "optimize",
-    "cleanup", "daemon", "config", "init", "completions", "update",
+    "cleanup", "daemon", "config", "init", "completions", "update", "stats",
     "help", "--help", "-h", "--version", "-V",
 ];
 
@@ -185,6 +185,13 @@ enum Command {
     Report {
         #[command(subcommand)]
         kind: ReportCommand,
+    },
+
+    /// Show index statistics: unit counts, languages, embeddings, disk usage.
+    Stats {
+        /// Repository root [default: current directory].
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
     },
 
     /// Wipe the index and regenerate from scratch.
@@ -450,6 +457,10 @@ fn main() -> Result<()> {
                 })?;
             }
         },
+
+        Command::Stats { path } => {
+            cli::stats::run(cli::stats::StatsArgs { path })?;
+        }
 
         Command::Rebuild { path, verbose } => {
             cli::maintenance::rebuild(cli::maintenance::RebuildArgs { path, verbose })?;

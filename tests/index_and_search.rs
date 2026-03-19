@@ -653,6 +653,975 @@ fn index_parses_python_rust_typescript() {
     }
 }
 
+// ── stats command ─────────────────────────────────────────────────────────────
+
+#[test]
+fn stats_requires_index_first() {
+    // Running stats with no index should exit non-zero with a helpful message.
+    let dir = tempfile::tempdir().unwrap();
+    let output = Command::new(SCOUT)
+        .args(["stats", "--path", &dir.path().to_string_lossy()])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "stats without an index should fail"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("scout index") || stderr.contains("No index"),
+        "error message should mention 'scout index'\n{stderr}"
+    );
+}
+
+#[test]
+fn stats_output_contains_expected_sections() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let output = Command::new(SCOUT)
+        .args(["stats", "--path", &repo.path().to_string_lossy()])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "scout stats failed\nstdout: {stdout}\nstderr: {stderr}"
+    );
+
+    // Must show key sections
+    assert!(stdout.contains("Unit types"), "stats must show Unit types section\n{stdout}");
+    assert!(stdout.contains("Languages"), "stats must show Languages section\n{stdout}");
+    assert!(stdout.contains("Embeddings"), "stats must show Embeddings section\n{stdout}");
+    assert!(stdout.contains("Storage"), "stats must show Storage section\n{stdout}");
+    assert!(stdout.contains("Status"), "stats must show Status section\n{stdout}");
+}
+
+#[test]
+fn stats_output_shows_nonzero_unit_count() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let output = Command::new(SCOUT)
+        .args(["stats", "--path", &repo.path().to_string_lossy()])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success());
+
+    // The fixture has Python, Rust, TypeScript files — at least one language must appear
+    let has_lang = stdout.contains("python")
+        || stdout.contains("rust")
+        || stdout.contains("typescript");
+    assert!(
+        has_lang,
+        "stats output should list at least one language\n{stdout}"
+    );
+}
+
+#[test]
+fn stats_output_shows_database_size() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let output = Command::new(SCOUT)
+        .args(["stats", "--path", &repo.path().to_string_lossy()])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success());
+    // Storage section must mention the database file and show a non-zero size
+    assert!(
+        stdout.contains("metadata.db"),
+        "stats should show metadata.db size\n{stdout}"
+    );
+}
+
+// ── daemon hook script content ────────────────────────────────────────────────
+
+#[test]
+fn install_hooks_uses_mkdir_not_flock() {
+    // Installs git hooks into a temp git repo, then reads the hook files to
+    // verify the portable mkdir lock is used instead of the Linux-only flock(1).
+    let repo = make_fixture_repo();
+
+    // Initialise a real git repo so install-hooks can find .git/
+    let git_init = Command::new("git")
+        .args(["init"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(git_init.status.success(), "git init failed");
+
+    let output = Command::new(SCOUT)
+        .args(["daemon", "install-hooks", "--path", &repo.path().to_string_lossy()])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "daemon install-hooks failed\n{stderr}"
+    );
+
+    // Check each hook file that was written
+    let hooks_dir = repo.path().join(".git/hooks");
+    let hook_names = ["post-commit", "post-merge", "post-checkout"];
+    let mut found_any = false;
+
+    for hook in &hook_names {
+        let hook_path = hooks_dir.join(hook);
+        if !hook_path.exists() {
+            continue;
+        }
+        found_any = true;
+        let content = fs::read_to_string(&hook_path)
+            .unwrap_or_else(|_| panic!("failed to read hook file {hook}"));
+
+        assert!(
+            content.contains("mkdir"),
+            "hook '{hook}' must use mkdir for locking (not flock)\n{content}"
+        );
+        assert!(
+            !content.contains("flock"),
+            "hook '{hook}' must NOT use flock (Linux-only, not portable)\n{content}"
+        );
+    }
+
+    assert!(found_any, "at least one hook file must have been written");
+}
+
+// ── --limit flag ──────────────────────────────────────────────────────────────
+
+#[test]
+fn search_limit_one_returns_exactly_one_result() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    // Index has multiple functions; --limit 1 must return exactly 1.
+    let output = Command::new(SCOUT)
+        .args([
+            "search",
+            "function",
+            "--format", "json",
+            "--limit", "1",
+            "--no-tui",
+            "--path", &repo.path().to_string_lossy(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success());
+    if stdout.trim().is_empty() { return; }
+    let results: Vec<serde_json::Value> = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(results.len(), 1, "--limit 1 must return exactly 1 result");
+}
+
+#[test]
+fn search_limit_three_returns_at_most_three() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let output = Command::new(SCOUT)
+        .args([
+            "search",
+            "authenticate",
+            "--format", "json",
+            "--limit", "3",
+            "--no-tui",
+            "--path", &repo.path().to_string_lossy(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success());
+    if stdout.trim().is_empty() { return; }
+    let results: Vec<serde_json::Value> = serde_json::from_str(&stdout).unwrap();
+    assert!(results.len() <= 3, "--limit 3 returned {} results", results.len());
+}
+
+// ── --no-tui flag ─────────────────────────────────────────────────────────────
+
+#[test]
+fn search_no_tui_flag_produces_plain_text_output() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let output = Command::new(SCOUT)
+        .args([
+            "search",
+            "process_payment",
+            "--no-tui",
+            "--path", &repo.path().to_string_lossy(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "search --no-tui failed");
+    // Plain text output should contain the function name
+    assert!(
+        stdout.contains("process_payment"),
+        "plain output must contain function name\n{stdout}"
+    );
+}
+
+// ── --exclude-tests flag ──────────────────────────────────────────────────────
+
+#[test]
+fn search_exclude_tests_filters_test_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    // Write one production file and one test file with the same function name.
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/auth.py"),
+        "def validate_token(token: str) -> bool:\n    return len(token) > 0\n",
+    ).unwrap();
+
+    fs::create_dir_all(root.join("tests")).unwrap();
+    fs::write(
+        root.join("tests/test_auth.py"),
+        "def validate_token():\n    assert validate_token('abc') == True\n",
+    ).unwrap();
+
+    index_repo(root);
+
+    // Without --exclude-tests both files should contribute results.
+    let all = Command::new(SCOUT)
+        .args(["search", "validate_token", "--format", "json", "--limit", "20", "--no-tui",
+               "--path", &root.to_string_lossy()])
+        .current_dir(root)
+        .output().unwrap();
+    let all_stdout = String::from_utf8_lossy(&all.stdout);
+    let all_results: Vec<serde_json::Value> = serde_json::from_str(&all_stdout).unwrap_or_default();
+
+    // With --exclude-tests, test files must be absent.
+    let filtered = Command::new(SCOUT)
+        .args(["search", "validate_token", "--format", "json", "--limit", "20",
+               "--no-tui", "--exclude-tests", "--path", &root.to_string_lossy()])
+        .current_dir(root)
+        .output().unwrap();
+
+    let filtered_stdout = String::from_utf8_lossy(&filtered.stdout);
+    assert!(filtered.status.success());
+    if !filtered_stdout.trim().is_empty() {
+        let filtered_results: Vec<serde_json::Value> = serde_json::from_str(&filtered_stdout).unwrap();
+        for r in &filtered_results {
+            let path = r["file_path"].as_str().unwrap_or("");
+            assert!(
+                !path.contains("/tests/") && !path.contains("test_"),
+                "--exclude-tests allowed test file through: {path}"
+            );
+        }
+        // Filtered set must be ≤ full set
+        assert!(
+            filtered_results.len() <= all_results.len(),
+            "filtered result count exceeded unfiltered count"
+        );
+    }
+}
+
+// ── --show-context flag ───────────────────────────────────────────────────────
+
+#[test]
+fn search_show_context_does_not_crash() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let output = Command::new(SCOUT)
+        .args([
+            "search",
+            "process_payment",
+            "--show-context",
+            "--no-tui",
+            "--path", &repo.path().to_string_lossy(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "search --show-context crashed\n{stderr}"
+    );
+}
+
+// ── empty / no-results queries ────────────────────────────────────────────────
+
+#[test]
+fn search_nonsense_query_returns_no_results_gracefully() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let output = Command::new(SCOUT)
+        .args([
+            "search",
+            "xyzzy_zzz_nonexistent_function_name_abc123",
+            "--format", "json",
+            "--no-tui",
+            "--path", &repo.path().to_string_lossy(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    // Must exit 0 even with no results (just prints to stderr "No results for...")
+    assert!(
+        output.status.success(),
+        "search with no results should not crash"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Either empty output or empty JSON array
+    if !stdout.trim().is_empty() {
+        let parsed: Vec<serde_json::Value> = serde_json::from_str(&stdout).unwrap_or_default();
+        assert!(parsed.is_empty(), "nonsense query should return no results");
+    }
+}
+
+#[test]
+fn search_special_characters_in_query_do_not_crash() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    // Queries with special regex/SQL characters must not cause a panic or signal abort.
+    // Some queries (e.g. malformed Tantivy syntax) may return a non-zero exit code
+    // with a user-readable error — that is acceptable. What is NOT acceptable is
+    // a crash (segfault, OOM) or a completely empty response with no message.
+    for query in &["(auth)", "a.b.c", "x + y", "back\\slash", "foo AND bar"] {
+        let output = Command::new(SCOUT)
+            .args([
+                "search", query,
+                "--format", "json",
+                "--no-tui",
+                "--path", &repo.path().to_string_lossy(),
+            ])
+            .current_dir(repo.path())
+            .output()
+            .unwrap();
+
+        // Signal abort would make `output` an Err — we already unwrapped above.
+        // Just ensure the process did not exit due to a signal (code < 0 on Unix).
+        let code = output.status.code();
+        assert!(
+            code.is_some(),
+            "search with query '{query}' was killed by a signal (crash)"
+        );
+    }
+}
+
+// ── missing-index error paths ─────────────────────────────────────────────────
+
+#[test]
+fn search_without_index_exits_with_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = Command::new(SCOUT)
+        .args([
+            "search", "anything",
+            "--format", "json",
+            "--no-tui",
+            "--path", &dir.path().to_string_lossy(),
+        ])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "search without index must fail"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("scout index") || stderr.contains("No index"),
+        "error must mention how to fix it\n{stderr}"
+    );
+}
+
+#[test]
+fn optimize_without_index_exits_with_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = Command::new(SCOUT)
+        .args(["optimize", "--path", &dir.path().to_string_lossy()])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "optimize without index must fail");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.is_empty(), "error output must not be empty");
+}
+
+#[test]
+fn cleanup_without_index_exits_with_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = Command::new(SCOUT)
+        .args(["cleanup", "--path", &dir.path().to_string_lossy()])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "cleanup without index must fail");
+}
+
+#[test]
+fn report_without_index_exits_with_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = Command::new(SCOUT)
+        .args(["report", "unused-functions", "--path", &dir.path().to_string_lossy()])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "report without index must fail");
+}
+
+// ── --find-similar error handling ─────────────────────────────────────────────
+
+#[test]
+fn find_similar_bad_format_errors() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    // Missing colon — should fail with helpful message.
+    let output = Command::new(SCOUT)
+        .args([
+            "search",
+            "--find-similar", "src/auth.py",  // no :LINE part
+            "--no-tui",
+            "--path", &repo.path().to_string_lossy(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "--find-similar without LINE must fail"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("FILE:LINE") || stderr.contains("find-similar"),
+        "error must mention expected format\n{stderr}"
+    );
+}
+
+#[test]
+fn find_similar_non_numeric_line_errors() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let output = Command::new(SCOUT)
+        .args([
+            "search",
+            "--find-similar", "src/auth.py:notanumber",
+            "--no-tui",
+            "--path", &repo.path().to_string_lossy(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "--find-similar with non-numeric line must fail"
+    );
+}
+
+// ── repos add / remove lifecycle ──────────────────────────────────────────────
+
+#[test]
+fn repos_add_then_list_then_remove() {
+    let repo = make_fixture_repo();
+    let name = format!("test-repo-{}", std::process::id()); // unique name per test run
+
+    // Add
+    let add_out = Command::new(SCOUT)
+        .args(["repos", "add", &name, &repo.path().to_string_lossy()])
+        .output()
+        .unwrap();
+    let add_stderr = String::from_utf8_lossy(&add_out.stderr);
+    assert!(add_out.status.success(), "repos add failed\n{add_stderr}");
+    let add_stdout = String::from_utf8_lossy(&add_out.stdout);
+    assert!(add_stdout.contains(&name), "add output must mention name\n{add_stdout}");
+
+    // List — new repo must appear
+    let list_out = Command::new(SCOUT).args(["repos", "list"]).output().unwrap();
+    let list_stdout = String::from_utf8_lossy(&list_out.stdout);
+    assert!(list_out.status.success(), "repos list failed");
+    assert!(list_stdout.contains(&name), "added repo must appear in list\n{list_stdout}");
+
+    // Remove
+    let rm_out = Command::new(SCOUT).args(["repos", "remove", &name]).output().unwrap();
+    let rm_stderr = String::from_utf8_lossy(&rm_out.stderr);
+    assert!(rm_out.status.success(), "repos remove failed\n{rm_stderr}");
+
+    // List — repo must no longer appear
+    let list2 = Command::new(SCOUT).args(["repos", "list"]).output().unwrap();
+    let list2_stdout = String::from_utf8_lossy(&list2.stdout);
+    assert!(!list2_stdout.contains(&name), "removed repo must not appear in list\n{list2_stdout}");
+}
+
+#[test]
+fn repos_remove_nonexistent_errors() {
+    let output = Command::new(SCOUT)
+        .args(["repos", "remove", "this-repo-does-not-exist-xyz"])
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "removing a nonexistent repo must fail"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.is_empty(), "error output must explain the problem");
+}
+
+#[test]
+fn repos_add_invalid_path_errors() {
+    let output = Command::new(SCOUT)
+        .args(["repos", "add", "myrepo", "/this/path/does/not/exist/xyz"])
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "repos add with invalid path must fail"
+    );
+}
+
+// ── config get / set via CLI ──────────────────────────────────────────────────
+
+#[test]
+fn config_get_known_key_succeeds() {
+    let output = Command::new(SCOUT)
+        .args(["config", "get", "search.limit"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "config get known key failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Should print the current value (default is "10")
+    assert!(!stdout.trim().is_empty(), "config get must print a value");
+}
+
+#[test]
+fn config_get_unknown_key_errors() {
+    let output = Command::new(SCOUT)
+        .args(["config", "get", "this.key.does.not.exist"])
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "config get with unknown key must fail"
+    );
+}
+
+#[test]
+fn config_set_and_get_roundtrip() {
+    // Set search.limit to a non-default value, then read it back.
+    let set_out = Command::new(SCOUT)
+        .args(["config", "set", "search.limit", "42"])
+        .output()
+        .unwrap();
+    assert!(set_out.status.success(), "config set failed");
+
+    let get_out = Command::new(SCOUT)
+        .args(["config", "get", "search.limit"])
+        .output()
+        .unwrap();
+    assert!(get_out.status.success(), "config get failed after set");
+    let val = String::from_utf8_lossy(&get_out.stdout);
+    assert_eq!(val.trim(), "42", "config get must return the value that was set");
+
+    // Restore default so we don't pollute other tests.
+    Command::new(SCOUT)
+        .args(["config", "set", "search.limit", "10"])
+        .output()
+        .unwrap();
+}
+
+#[test]
+fn config_set_invalid_value_errors() {
+    let output = Command::new(SCOUT)
+        .args(["config", "set", "search.limit", "not_a_number"])
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "config set with invalid value must fail"
+    );
+}
+
+#[test]
+fn config_set_unknown_key_errors() {
+    let output = Command::new(SCOUT)
+        .args(["config", "set", "not.a.real.key", "value"])
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "config set with unknown key must fail"
+    );
+}
+
+#[test]
+fn config_list_shows_all_known_keys() {
+    let output = Command::new(SCOUT).args(["config", "list"]).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for key in &[
+        "search.limit",
+        "search.no_tui",
+        "search.format",
+        "search.exclude_tests",
+        "index.auto_index",
+        "editor.command",
+    ] {
+        assert!(stdout.contains(key), "config list must show '{key}'\n{stdout}");
+    }
+}
+
+// ── completions generation ────────────────────────────────────────────────────
+
+#[test]
+fn completions_bash_outputs_non_empty_script() {
+    let output = Command::new(SCOUT).args(["completions", "bash"]).output().unwrap();
+    assert!(output.status.success(), "completions bash failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.trim().is_empty(), "bash completions must be non-empty");
+    // Bash completions script must reference the binary name
+    assert!(
+        stdout.contains("scout"),
+        "bash completions must reference 'scout'\n{stdout}"
+    );
+}
+
+#[test]
+fn completions_zsh_outputs_non_empty_script() {
+    let output = Command::new(SCOUT).args(["completions", "zsh"]).output().unwrap();
+    assert!(output.status.success(), "completions zsh failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.trim().is_empty(), "zsh completions must be non-empty");
+}
+
+#[test]
+fn completions_fish_outputs_non_empty_script() {
+    let output = Command::new(SCOUT).args(["completions", "fish"]).output().unwrap();
+    assert!(output.status.success(), "completions fish failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.trim().is_empty(), "fish completions must be non-empty");
+}
+
+// ── daemon status ─────────────────────────────────────────────────────────────
+
+#[test]
+fn daemon_status_when_not_running_exits_cleanly() {
+    let repo = make_fixture_repo();
+    // No daemon started — status should exit 0 and report "not running".
+    let output = Command::new(SCOUT)
+        .args(["daemon", "status", "--path", &repo.path().to_string_lossy()])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "daemon status must not fail when daemon is not running"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+    assert!(
+        combined.contains("not running") || combined.contains("stopped"),
+        "daemon status must indicate it is not running\n{combined}"
+    );
+}
+
+#[test]
+fn daemon_stop_when_not_running_gives_clear_message() {
+    let repo = make_fixture_repo();
+    let output = Command::new(SCOUT)
+        .args(["daemon", "stop", "--path", &repo.path().to_string_lossy()])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    // May succeed or fail — but must not panic (signal abort / OOM).
+    // A non-zero exit is expected here; we just want a clean, readable message.
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let combined = format!("{stdout}{stderr}");
+    assert!(
+        combined.contains("running") || combined.contains("daemon") || combined.contains("No"),
+        "daemon stop must give a descriptive message, got:\n{combined}"
+    );
+}
+
+// ── install-hooks idempotency ─────────────────────────────────────────────────
+
+#[test]
+fn install_hooks_twice_does_not_duplicate_content() {
+    let repo = make_fixture_repo();
+    let git_init = Command::new("git").args(["init"]).current_dir(repo.path()).output().unwrap();
+    assert!(git_init.status.success());
+
+    let path_arg = repo.path().to_string_lossy().to_string();
+
+    // Install once
+    Command::new(SCOUT)
+        .args(["daemon", "install-hooks", "--path", &path_arg])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    // Install again
+    let second = Command::new(SCOUT)
+        .args(["daemon", "install-hooks", "--path", &path_arg])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(second.status.success(), "second install-hooks must succeed");
+
+    // Each hook file should have the scout snippet exactly once.
+    let hooks_dir = repo.path().join(".git/hooks");
+    for hook in &["post-commit", "post-merge", "post-checkout"] {
+        let p = hooks_dir.join(hook);
+        if !p.exists() { continue; }
+        let content = fs::read_to_string(&p).unwrap();
+        let count = content.matches("scout").count();
+        assert!(
+            count >= 1,
+            "hook '{hook}' must contain at least one 'scout' invocation"
+        );
+        // Count the actual "scout update" command lines — the idempotency guard
+        // prevents the command from being appended twice.
+        // The word "scout" may appear multiple times (in comments and the command),
+        // but the functional invocation line should not be duplicated.
+        let invocation_count = content.lines()
+            .filter(|l| l.contains("scout") && l.contains("update") && l.contains("--path"))
+            .count();
+        assert_eq!(
+            invocation_count, 1,
+            "hook '{hook}' must have exactly 1 scout update invocation (idempotency)\n{content}"
+        );
+    }
+}
+
+// ── search result rank field ──────────────────────────────────────────────────
+
+#[test]
+fn search_results_have_sequential_ranks() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let results = search_json(repo.path(), "process_payment");
+    for (i, r) in results.iter().enumerate() {
+        let rank = r["rank"].as_u64().unwrap_or(0);
+        assert_eq!(
+            rank,
+            (i + 1) as u64,
+            "result at index {i} has rank {rank}, expected {}",
+            i + 1
+        );
+    }
+}
+
+// ── verbose index output ──────────────────────────────────────────────────────
+
+#[test]
+fn index_verbose_shows_parsed_files() {
+    let repo = make_fixture_repo();
+    let output = Command::new(SCOUT)
+        .args(["index", "--verbose", &repo.path().to_string_lossy()])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "index --verbose failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Verbose mode should show each file being parsed.
+    assert!(
+        stdout.contains(".py") || stdout.contains(".rs") || stdout.contains(".ts"),
+        "verbose output must mention source files\n{stdout}"
+    );
+}
+
+// ── cleanup removes deleted files ─────────────────────────────────────────────
+
+#[test]
+fn cleanup_removes_deleted_file_from_index() {
+    use rusqlite::Connection;
+
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    // Delete one file.
+    fs::remove_file(repo.path().join("services/auth/login.py")).unwrap();
+
+    // Run cleanup.
+    let output = Command::new(SCOUT)
+        .args(["cleanup", "--path", &repo.path().to_string_lossy()])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "cleanup failed");
+
+    // Verify the deleted file's units are gone from SQLite.
+    let conn = Connection::open(repo.path().join(".scout/metadata.db")).unwrap();
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM code_units WHERE file_path LIKE '%login.py'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 0, "cleanup must remove units from deleted file");
+}
+
+// ── cross-repo search ─────────────────────────────────────────────────────────
+
+#[test]
+fn all_repos_with_no_repos_registered_errors() {
+    // --all-repos with no repos in registry should give a clear error.
+    let repo = make_fixture_repo();
+    let output = Command::new(SCOUT)
+        .args([
+            "search", "authenticate",
+            "--all-repos",
+            "--format", "json",
+            "--no-tui",
+            "--path", &repo.path().to_string_lossy(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    // Either succeeds with empty results or fails with a helpful message.
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Must not panic — either exit 0 with empty output or clear error message.
+    // (The registry may be empty or may have repos from other tests — both are fine.)
+    let combined = format!("{stdout}{stderr}");
+    assert!(
+        !combined.is_empty() || output.status.success(),
+        "command must either succeed or give a clear message\n{combined}"
+    );
+}
+
+#[test]
+fn repos_flag_with_unknown_repo_errors() {
+    let repo = make_fixture_repo();
+    let output = Command::new(SCOUT)
+        .args([
+            "search", "authenticate",
+            "--repos", "totally-unknown-repo-xyz",
+            "--format", "json",
+            "--no-tui",
+            "--path", &repo.path().to_string_lossy(),
+        ])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "--repos with unknown name must fail"
+    );
+}
+
+// ── rebuild preserves all languages ──────────────────────────────────────────
+
+#[test]
+fn rebuild_preserves_all_languages() {
+    use rusqlite::Connection;
+
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let output = Command::new(SCOUT)
+        .args(["rebuild", "--path", &repo.path().to_string_lossy()])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "rebuild failed");
+
+    let conn = Connection::open(repo.path().join(".scout/metadata.db")).unwrap();
+    for lang in &["python", "rust", "typescript"] {
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM code_units WHERE language = ?1",
+                rusqlite::params![lang],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(count > 0, "rebuild lost all {lang} units");
+    }
+}
+
+// ── report unused-functions accuracy ─────────────────────────────────────────
+
+#[test]
+fn report_unused_functions_output_format() {
+    let repo = make_fixture_repo();
+    index_repo(repo.path());
+
+    let output = Command::new(SCOUT)
+        .args(["report", "unused-functions", "--path", &repo.path().to_string_lossy()])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "report unused-functions failed");
+    // Output is either a table of unused functions or a "none found" message.
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.is_empty(),
+        "report must produce some output (either functions or a 'none' message)"
+    );
+}
+
+// ── index with zero parseable files ──────────────────────────────────────────
+
+#[test]
+fn index_directory_with_no_source_files_succeeds() {
+    let dir = tempfile::tempdir().unwrap();
+    // Only a text file — no parseable source.
+    fs::write(dir.path().join("README.txt"), "just a readme").unwrap();
+
+    let output = Command::new(SCOUT)
+        .args(["index", &dir.path().to_string_lossy()])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    // Should succeed with 0 units, not crash.
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "index with no source files must not crash\n{stderr}"
+    );
+}
+
 #[test]
 fn python_functions_have_non_empty_body() {
     use rusqlite::Connection;

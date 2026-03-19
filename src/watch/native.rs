@@ -5,7 +5,7 @@
 //! gracefully if the OS inotify/kqueue limit is exceeded.
 
 use std::path::Path;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, SyncSender};
 
 use anyhow::Result;
 use notify::event::{CreateKind, ModifyKind, RemoveKind};
@@ -15,13 +15,15 @@ use crate::index::walker;
 use super::{ChangeKind, FileChange, WatchEvent};
 
 /// Watch all source files under `root` using OS-native file events.
-/// Applies the same exclusion filters as the indexer.
-pub fn watch(root: &Path, tx: Sender<WatchEvent>) -> Result<()> {
+///
+/// Signals startup success/failure via `ready` before entering the blocking
+/// loop, so the caller does not need a sleep-based heuristic.
+pub fn watch(root: &Path, tx: Sender<WatchEvent>, ready: SyncSender<Result<()>>) {
     let root = root.to_path_buf();
     let excluded = walker::excluded_dirs();
 
     let tx2 = tx.clone();
-    let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
+    let mut watcher = match notify::recommended_watcher(move |res: notify::Result<Event>| {
         let Ok(event) = res else { return };
 
         let kind = match event.kind {
@@ -37,7 +39,6 @@ pub fn watch(root: &Path, tx: Sender<WatchEvent>) -> Result<()> {
             .paths
             .into_iter()
             .filter(|p| {
-                // Apply the same exclusion logic as the walker.
                 !p.components().any(|c| {
                     c.as_os_str()
                         .to_str()
@@ -51,10 +52,21 @@ pub fn watch(root: &Path, tx: Sender<WatchEvent>) -> Result<()> {
         if !changes.is_empty() {
             let _ = tx2.send(WatchEvent::Files(changes));
         }
-    })?;
+    }) {
+        Ok(w) => w,
+        Err(e) => {
+            let _ = ready.send(Err(anyhow::anyhow!("notify watcher failed: {e}")));
+            return;
+        }
+    };
 
-    watcher.watch(&root, RecursiveMode::Recursive)
-        .map_err(|e| anyhow::anyhow!("native watcher failed: {e} — try polling fallback"))?;
+    if let Err(e) = watcher.watch(&root, RecursiveMode::Recursive) {
+        let _ = ready.send(Err(anyhow::anyhow!("native watcher failed: {e} — try polling fallback")));
+        return;
+    }
+
+    // Initialization succeeded — signal the caller before blocking.
+    let _ = ready.send(Ok(()));
 
     loop {
         std::thread::sleep(std::time::Duration::from_secs(60));

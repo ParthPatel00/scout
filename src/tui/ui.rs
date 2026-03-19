@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
 use syntect::easy::HighlightLines;
@@ -81,6 +81,7 @@ fn render_result_list(f: &mut Frame, app: &App, area: Rect) {
 // ─── Preview pane ─────────────────────────────────────────────────────────────
 
 fn render_preview(f: &mut Frame, app: &App, area: Rect) {
+    f.render_widget(Clear, area);
     let block = Block::default()
         .title(" Preview ")
         .borders(Borders::ALL)

@@ -34,6 +34,11 @@ fn remove_state(idx_dir: &std::path::Path) {
     let _ = std::fs::remove_file(pid_path(idx_dir));
 }
 
+/// Public entry point for the PID cleanup guard inside `watch/daemon.rs`.
+pub fn remove_pid(idx_dir: &std::path::Path) {
+    remove_state(idx_dir);
+}
+
 /// Check if a process with `pid` is currently running.
 fn is_running(pid: u32) -> bool {
     #[cfg(unix)]
@@ -103,8 +108,13 @@ pub fn start(args: StartArgs) -> Result<()> {
     }
 
     let child = cmd.spawn().context("failed to spawn daemon process")?;
-
     let pid = child.id();
+
+    // The daemon called setsid() so it's in its own session and will be
+    // reparented to init when this parent exits. Forget the Child handle so
+    // Rust doesn't try to own the process — init will reap it when it exits.
+    std::mem::forget(child);
+
     let state = DaemonState {
         pid,
         started_at: chrono::Utc::now().timestamp(),
@@ -141,6 +151,19 @@ pub fn stop(args: StopArgs) -> Result<()> {
         unsafe {
             libc::kill(state.pid as libc::pid_t, libc::SIGTERM);
         }
+
+        // Wait up to 3 seconds for the process to exit cleanly.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while std::time::Instant::now() < deadline && is_running(state.pid) {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+
+        // Force-kill if it didn't exit in time.
+        if is_running(state.pid) {
+            unsafe { libc::kill(state.pid as libc::pid_t, libc::SIGKILL); }
+            eprintln!("scout: daemon did not stop gracefully, sent SIGKILL.");
+        }
+
         remove_state(&idx_dir);
         println!("Daemon stopped (PID {}).", state.pid);
         Ok(())
@@ -209,11 +232,29 @@ pub fn install_hooks(args: InstallHooksArgs) -> Result<()> {
     let exe = std::env::current_exe().context("failed to find current executable")?;
     let exe_str = exe.to_string_lossy();
 
+    // Use `mkdir` as a portable atomic lock — works on Linux, macOS, and
+    // Windows Git Bash. `flock(1)` is Linux-only and not available on macOS.
+    // `mkdir` is guaranteed atomic by POSIX: the second concurrent caller gets
+    // EEXIST and the subshell exits immediately, preventing pileup.
+    let lock_dir = index::index_dir(&root)
+        .map(|d| d.join("hook.lock.d"))
+        .unwrap_or_else(|_| root.join(".scout").join("hook.lock.d"));
+
     for hook in &["post-commit", "post-merge", "post-checkout"] {
         let hook_path = hooks_dir.join(hook);
-        let script = format!(
-            "#!/bin/sh\n# Added by scout\n\"{exe_str}\" update --path \"{root}\" &\n",
-            root = root.display()
+        // Run in background (&) so git doesn't wait for the index update.
+        // mkdir acts as an atomic mutex: only the first concurrent caller
+        // proceeds; others exit immediately.
+        let snippet = format!(
+            "\n# scout incremental update (added by scout)\n\
+             (\n  \
+             mkdir \"{lock}\" 2>/dev/null || exit 0\n  \
+             trap 'rmdir \"{lock}\" 2>/dev/null' EXIT INT TERM\n  \
+             \"{exe}\" update --path \"{root}\" >/dev/null 2>&1\n\
+             ) &\n",
+            lock = lock_dir.display(),
+            exe  = exe_str,
+            root = root.display(),
         );
 
         // Append to existing hook or create new.
@@ -221,14 +262,11 @@ pub fn install_hooks(args: InstallHooksArgs) -> Result<()> {
             let existing = std::fs::read_to_string(&hook_path)?;
             if !existing.contains("scout") {
                 let mut content = existing;
-                content.push_str(&format!(
-                    "\n# scout incremental update\n\"{exe_str}\" update --path \"{root}\" &\n",
-                    root = root.display()
-                ));
+                content.push_str(&snippet);
                 std::fs::write(&hook_path, content)?;
             }
         } else {
-            std::fs::write(&hook_path, &script)?;
+            std::fs::write(&hook_path, format!("#!/bin/sh{snippet}"))?;
         }
 
         // Make executable on Unix.

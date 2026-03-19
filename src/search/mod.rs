@@ -164,4 +164,121 @@ mod tests {
         assert!(!is_test_file("src/utils/helpers.ts"));
         assert!(!is_test_file("src/context/provider.ts")); // "context" has no test pattern
     }
+
+    #[test]
+    fn is_test_file_slash_test_slash() {
+        assert!(is_test_file("src/test/helpers.rs"));
+    }
+
+    #[test]
+    fn is_test_file_slash_tests_slash() {
+        assert!(is_test_file("project/tests/unit/auth.py"));
+    }
+
+    #[test]
+    fn is_test_file_slash_spec_slash() {
+        assert!(is_test_file("src/spec/auth_spec.rb"));
+    }
+
+    #[test]
+    fn is_test_file_slash_specs_slash() {
+        assert!(is_test_file("src/specs/login_spec.js"));
+    }
+
+    #[test]
+    fn is_test_file_dot_test_dot() {
+        assert!(is_test_file("src/auth.test.js"));
+        assert!(is_test_file("src/auth.test.ts"));
+        assert!(is_test_file("src/auth.test.py"));
+    }
+
+    #[test]
+    fn is_test_file_dot_spec_dot() {
+        assert!(is_test_file("src/auth.spec.ts"));
+        assert!(is_test_file("components/Login.spec.jsx"));
+    }
+
+    #[test]
+    fn is_test_file_underscore_test_dot() {
+        assert!(is_test_file("src/auth_test.go"));
+        assert!(is_test_file("handlers/payment_test.go"));
+    }
+
+    #[test]
+    fn is_test_file_test_underscore_prefix() {
+        assert!(is_test_file("test_auth.py"));
+        assert!(is_test_file("test_payments.py"));
+    }
+
+    #[test]
+    fn is_test_file_slash_test_underscore_infix() {
+        assert!(is_test_file("src/test_helpers/util.rs"));
+        assert!(is_test_file("src/test_utils.go"));
+    }
+
+    #[test]
+    fn is_test_file_case_insensitive() {
+        // Patterns are matched after to_ascii_lowercase
+        assert!(is_test_file("src/Tests/auth.rs"));
+        assert!(is_test_file("src/AUTH_TEST.go"));
+        assert!(is_test_file("src/Auth.Test.ts"));
+    }
+
+    #[test]
+    fn is_test_file_regular_files_not_matched() {
+        assert!(!is_test_file("src/auth/login.rs"));
+        assert!(!is_test_file("services/payments/processor.rs"));
+        assert!(!is_test_file("frontend/src/api.ts"));
+        assert!(!is_test_file("main.go"));
+        assert!(!is_test_file("latest_data.json")); // "test" substring but no pattern match
+    }
+
+    // ── matches_lang edge cases ────────────────────────────────────────────────
+
+    #[test]
+    fn matches_lang_case_sensitive() {
+        let f = SearchFilter { lang: Some("python".into()), ..Default::default() };
+        assert!(f.matches_lang("python"));
+        assert!(!f.matches_lang("Python"));
+        assert!(!f.matches_lang("PYTHON"));
+    }
+
+    #[test]
+    fn matches_lang_empty_string() {
+        let f = SearchFilter { lang: Some("".into()), ..Default::default() };
+        // Empty filter matches only empty language strings.
+        assert!(f.matches_lang(""));
+        assert!(!f.matches_lang("rust"));
+    }
+
+    // ── matches_path edge cases ────────────────────────────────────────────────
+
+    #[test]
+    fn matches_path_empty_prefix_matches_everything() {
+        let f = SearchFilter { path_prefix: Some("".into()), ..Default::default() };
+        assert!(f.matches_path("src/anything.rs")); // empty string is contained in every string
+    }
+
+    #[test]
+    fn matches_path_prefix_is_substring_not_prefix() {
+        // path_prefix is a substring match, not a strict path prefix.
+        let f = SearchFilter { path_prefix: Some("auth".into()), ..Default::default() };
+        assert!(f.matches_path("src/auth/login.rs"));
+        assert!(f.matches_path("services/authentication/handler.py")); // "auth" is a substring
+        assert!(!f.matches_path("src/payments/checkout.rs"));
+    }
+
+    #[test]
+    fn matches_path_combine_lang_path_both_must_match() {
+        let f = SearchFilter {
+            lang: Some("rust".into()),
+            path_prefix: Some("payments".into()),
+            ..Default::default()
+        };
+        // matches_path and matches_lang are independent — test both together at call site
+        assert!(f.matches_path("services/payments/processor.rs"));
+        assert!(f.matches_lang("rust"));
+        assert!(!f.matches_path("services/auth/login.rs"));
+        assert!(!f.matches_lang("python"));
+    }
 }
