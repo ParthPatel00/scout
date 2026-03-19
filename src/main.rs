@@ -24,7 +24,7 @@ use crate::search::SearchFilter;
 /// Known subcommand names — anything else is treated as a search query.
 const SUBCOMMANDS: &[&str] = &[
     "index", "search", "s", "repos", "report", "rebuild", "optimize",
-    "cleanup", "daemon", "config", "init", "completions",
+    "cleanup", "daemon", "config", "init", "completions", "update",
     "help", "--help", "-h", "--version", "-V",
 ];
 
@@ -137,6 +137,9 @@ enum Command {
         #[arg(long, value_name = "FILE:LINE")]
         find_similar: Option<String>,
     },
+
+    /// Check for a newer release and update the binary in-place.
+    Update,
 
     /// Interactive first-time setup wizard.
     ///
@@ -386,6 +389,10 @@ fn main() -> Result<()> {
                 editor_cmd: cfg.editor.command.clone(),
                 auto_index: cfg.index.auto_index,
             })?;
+        }
+
+        Command::Update => {
+            cli::update::run()?;
         }
 
         Command::Init => {
