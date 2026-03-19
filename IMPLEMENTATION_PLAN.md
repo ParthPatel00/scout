@@ -23,9 +23,9 @@ After completing any phase and before starting the next, do the following:
 
 | Phase | Name | Focus | Status |
 |-------|------|--------|--------|
-| 1 | Foundation | Project setup, data models, tree-sitter parsing | ⬜ Not started |
-| 2 | Fast Search | Tantivy BM25 + basic CLI | ⬜ Not started |
-| 3 | Smart Search | Call graphs, filters, fusion ranking | ⬜ Not started |
+| 1 | Foundation | Project setup, data models, tree-sitter parsing | ✅ Complete |
+| 2 | Fast Search | Tantivy BM25 + basic CLI | ✅ Complete |
+| 3 | Smart Search | Call graphs, filters, fusion ranking | 🔄 In progress |
 | 4 | TUI & UX | Ratatui interface, syntax highlighting, output formats | ⬜ Not started |
 | 5 | Production Hardening | Concurrency, corruption recovery, migration, maintenance | ⬜ Not started |
 | 6 | Daemon & File Watching | Background indexing, incremental updates, git hooks | ⬜ Not started |

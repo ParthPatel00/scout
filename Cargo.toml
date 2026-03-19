@@ -1,0 +1,69 @@
+[package]
+name = "codesearch"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "codesearch"
+path = "src/main.rs"
+
+[features]
+default = []
+local-models = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:qdrant-client"]
+cloud-models = ["dep:reqwest"]
+full = ["local-models", "cloud-models"]
+
+[dependencies]
+# CLI & async
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1.36", features = ["full"] }
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Storage
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Search
+tantivy = "0.22"
+
+# Parsing
+tree-sitter = "0.25"
+tree-sitter-python = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-javascript = "0.25"
+tree-sitter-typescript = "0.23"
+tree-sitter-go = "0.25"
+tree-sitter-java = "0.23"
+
+# File system
+walkdir = "2.4"
+notify = "6.1"
+
+# Utilities
+sha2 = "0.10"
+hex = "0.4"
+rayon = "1.8"
+chrono = { version = "0.4", features = ["serde"] }
+
+# TUI (Phase 4)
+ratatui = { version = "0.26", optional = true }
+crossterm = { version = "0.27", optional = true }
+syntect = "5.2"
+
+# Compression (Phase 7+)
+zstd = { version = "0.13", optional = true }
+memmap2 = { version = "0.9", optional = true }
+
+# ML (Phase 7, local-models feature)
+candle-core = { version = "0.4", optional = true }
+candle-nn = { version = "0.4", optional = true }
+candle-transformers = { version = "0.4", optional = true }
+tokenizers = { version = "0.15", optional = true }
+qdrant-client = { version = "1.8", optional = true }
+
+# Cloud APIs (Phase 9, cloud-models feature)
+reqwest = { version = "0.11", features = ["json"], optional = true }
+
+[dev-dependencies]
+tempfile = "3.10"

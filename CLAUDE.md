@@ -101,15 +101,15 @@ codesearch optimize/cleanup/rebuild       # Index maintenance
 
 ## Implementation Plan
 
-**Current Phase: Phase 1 — Foundation**
+**Current Phase: Phase 3 — Smart Search & Filters**
 
 Full plan with testing guidelines and success criteria: `IMPLEMENTATION_PLAN.md`
 
 | Phase | Name | Focus | Status |
 |-------|------|--------|--------|
-| 1 | Foundation | Project setup, data models, tree-sitter parsing | ⬜ Not started |
-| 2 | Fast Search | Tantivy BM25 + basic CLI | ⬜ Not started |
-| 3 | Smart Search | Call graphs, filters, RRF fusion ranking | ⬜ Not started |
+| 1 | Foundation | Project setup, data models, tree-sitter parsing | ✅ Complete |
+| 2 | Fast Search | Tantivy BM25 + basic CLI | ✅ Complete |
+| 3 | Smart Search | Call graphs, filters, RRF fusion ranking | 🔄 In progress |
 | 4 | TUI & UX | Ratatui interface, syntax highlighting, export formats | ⬜ Not started |
 | 5 | Production Hardening | Concurrency, corruption recovery, migration | ⬜ Not started |
 | 6 | Daemon & File Watching | Background indexing, incremental updates, git hooks | ⬜ Not started |
