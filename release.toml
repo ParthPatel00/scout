@@ -2,7 +2,7 @@
 # https://github.com/crate-ci/cargo-release
 
 # Commit message when bumping the version
-commit-message = "release {{version}}"
+pre-release-commit-message = "release {{version}}"
 
 # Git tag format
 tag-name = "v{{version}}"
