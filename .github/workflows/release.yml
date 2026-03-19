@@ -33,7 +33,7 @@ jobs:
 
           # ── macOS ─────────────────────────────────────────────────────────
           - target: x86_64-apple-darwin
-            runner: macos-13            # last GitHub-hosted Intel runner
+            runner: macos-latest        # cross-compile Intel from ARM runner
             archive: tar.gz
             binary: scout
 

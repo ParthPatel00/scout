@@ -59,7 +59,7 @@ jobs:
             runner: ubuntu-latest
             use_cross: true
           - target: x86_64-apple-darwin
-            runner: macos-13          # last Intel runner
+            runner: macos-latest      # cross-compile Intel from ARM runner
           - target: aarch64-apple-darwin
             runner: macos-latest      # ARM (M-series)
           - target: x86_64-pc-windows-msvc
