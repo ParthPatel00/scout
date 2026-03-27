@@ -18,7 +18,7 @@ scout "where do we handle rate limiting"
 
 ---
 
-> **No cloud. No API keys. Single binary.** Scout indexes your code locally using tree-sitter AST parsing, BM25 full-text search, and optional AI vector embeddings — all fused together for the best results. BM25 mode works immediately with no setup. The AI model is a one-time ~350 MB download that unlocks concept-level search.
+> **No cloud. No API keys. Single binary.** Scout indexes your code locally using tree-sitter AST parsing, BM25 full-text search, and optional AI vector embeddings — all fused together for the best results. BM25 mode works immediately with no setup. The AI model is a one-time ~500 MB download that unlocks concept-level search.
 
 ---
 
@@ -176,11 +176,11 @@ Choosing **daemon** or **git hooks** causes `init` to immediately build the inde
 
 **5 — Enable AI-powered semantic search?**
 ```
-  Yes — download the model now  (~350 MB)
+  Yes — download the model now  (~500 MB)
   Yes — download in the background
   No  — keyword search is fine for now
 ```
-Choosing "download now" fetches the UniXcoder model (~350 MB) with a live progress bar. "Download in the background" spawns a detached process that fetches it without blocking. After the model is present, hybrid search (BM25 + name-match + vectors) runs automatically on every query — no flags needed.
+Choosing "download now" fetches the UniXcoder model (~500 MB) with a live progress bar. "Download in the background" spawns a detached process that fetches it without blocking. After the model is present, hybrid search (BM25 + name-match + vectors) runs automatically on every query — no flags needed.
 
 ---
 

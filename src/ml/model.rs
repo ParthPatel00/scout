@@ -101,7 +101,7 @@ pub fn download_model() -> Result<()> {
 /// Print instructions for obtaining the UniXcoder model weights (fallback).
 pub fn print_download_instructions() {
     let path = model_dir();
-    eprintln!("To enable semantic search, download the UniXcoder model (~350 MB):");
+    eprintln!("To enable semantic search, download the UniXcoder model (~500 MB):");
     eprintln!();
     eprintln!("  Option 1 — huggingface_hub (Python):");
     eprintln!("    pip install huggingface_hub");

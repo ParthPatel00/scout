@@ -110,7 +110,7 @@ fn render_preview(f: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(Color::Yellow),
             ),
         ]),
-        Line::from(Span::styled("─".repeat(area.width as usize), Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled("─".repeat(area.width.saturating_sub(2) as usize), Style::default().fg(Color::DarkGray))),
     ];
 
     // Syntax-highlighted body or signature.

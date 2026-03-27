@@ -77,12 +77,12 @@ pub fn run() -> Result<()> {
 
     // ── 5. Semantic (AI) search ───────────────────────────────────────────────
     println!();
-    println!("  \x1b[1mSemantic search\x1b[0m uses a local AI model (~350 MB, one-time download)");
+    println!("  \x1b[1mSemantic search\x1b[0m uses a local AI model (~500 MB, one-time download)");
     println!("  to find code by concept, not just keywords. Without it, Scout uses");
     println!("  BM25 + name-match — fast and accurate, but keyword-only.\n");
 
     let sem_opts = [
-        "Yes — download the model now  (~350 MB)",
+        "Yes — download the model now  (~500 MB)",
         "Yes — download in the background (scout will fetch it automatically)",
         "No  — keyword search is fine for now",
     ];
@@ -200,7 +200,7 @@ pub fn run() -> Result<()> {
             if model::is_model_downloaded() {
                 println!("\x1b[32m✓\x1b[0m Model already present — semantic search ready.");
             } else {
-                println!("\n  Downloading UniXcoder model (~350 MB) …");
+                println!("\n  Downloading UniXcoder model (~500 MB) …");
                 if let Err(e) = model::download_model() {
                     println!("\x1b[33m⚠\x1b[0m  Download failed: {e}");
                     println!("    You can retry later with: \x1b[1mscout index --download-model\x1b[0m");

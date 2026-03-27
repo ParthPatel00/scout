@@ -123,8 +123,14 @@ pub fn run(
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => break,
                     KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
-                    KeyCode::Char('j') | KeyCode::Down => app.next(),
-                    KeyCode::Char('k') | KeyCode::Up => app.previous(),
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        app.next();
+                        terminal.clear()?;
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        app.previous();
+                        terminal.clear()?;
+                    }
                     KeyCode::Char('d') | KeyCode::PageDown => app.scroll_preview_down(),
                     KeyCode::Char('u') | KeyCode::PageUp => app.scroll_preview_up(),
                     // Enter — open in editor and exit TUI.

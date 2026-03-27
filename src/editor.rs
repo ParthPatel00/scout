@@ -32,11 +32,36 @@ pub fn open_with(
             // On macOS, `code`/`cursor` may not be in PATH even when the app is installed.
             // vscode_binary() falls back to the well-known app bundle path.
             let cmd = vscode_binary(&bin);
-            std::process::Command::new(&cmd)
+            let spawn_result = std::process::Command::new(&cmd)
                 .args(["--goto", &format!("{abs_str}:{line}")])
                 .spawn()
-                .map(|_| ())
-                .map_err(|e| anyhow::anyhow!("Failed to launch {bin}: {e}\n  Tip: install the CLI via the app command palette → \"Install 'code' command in PATH\""))?;
+                .map(|_| ());
+
+            if spawn_result.is_ok() {
+                // launched successfully
+            } else {
+                // macOS fallback: `open -a` uses Launch Services to find the app
+                // regardless of where it is installed or whether the CLI is in PATH.
+                #[cfg(target_os = "macos")]
+                {
+                    let app_name = if bin == "cursor" { "Cursor" } else { "Visual Studio Code" };
+                    let open_status = std::process::Command::new("open")
+                        .args(["-a", app_name, "--args", "--goto", &format!("{abs_str}:{line}")])
+                        .status();
+                    if let Ok(s) = open_status {
+                        if s.success() {
+                            return Ok(());
+                        }
+                    }
+                }
+                spawn_result.map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to launch {bin}: {e}\n  \
+                         Tip: install the CLI via the app command palette → \
+                         \"Install 'code' command in PATH\""
+                    )
+                })?;
+            }
         }
         Editor::Zed => {
             std::process::Command::new("zed")
@@ -132,21 +157,30 @@ fn detect() -> Editor {
     }
 
     // macOS: VS Code/Cursor may be installed without the CLI in PATH.
+    // Check bundle path first (fast, no subprocess), then fall back to `open -Ra`
+    // which uses Launch Services to find any installed app regardless of location.
     #[cfg(target_os = "macos")]
     for (app, label) in &[
         ("Visual Studio Code", "code"),
         ("Cursor", "cursor"),
     ] {
-        let bundle = format!("/Applications/{app}.app/Contents/Resources/app/bin/code");
-        if std::path::Path::new(&bundle).exists() {
-            return classify(label.to_string());
+        // 1. Check well-known bundle CLI paths.
+        let bin_name = if *label == "cursor" { "cursor" } else { "code" };
+        for base in &[
+            "/Applications".to_string(),
+            format!("{}/Applications", std::env::var("HOME").unwrap_or_default()),
+        ] {
+            let bundle = format!("{base}/{app}.app/Contents/Resources/app/bin/{bin_name}");
+            if std::path::Path::new(&bundle).exists() {
+                return classify(label.to_string());
+            }
         }
-        if let Some(home) = std::env::var_os("HOME") {
-            let user_bundle = format!(
-                "{}/Applications/{app}.app/Contents/Resources/app/bin/code",
-                home.to_string_lossy()
-            );
-            if std::path::Path::new(&user_bundle).exists() {
+        // 2. Use `open -Ra <AppName>` — exits 0 if the app exists anywhere on the system.
+        if let Ok(status) = std::process::Command::new("open")
+            .args(["-Ra", app])
+            .status()
+        {
+            if status.success() {
                 return classify(label.to_string());
             }
         }
