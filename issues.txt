@@ -1,0 +1,1 @@
+The auto detect of what code editor (or no code editor) isn't working. I have VS code open and it says cursor. By default it should probably just open it in a simple text editor inside the terminal like nano or vim.

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyModifiers},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -119,10 +119,10 @@ pub fn run(
         terminal.draw(|f| ui::render(f, &app))?;
 
         if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                match key.code {
+            if let Event::Key(KeyEvent { code, modifiers, kind: KeyEventKind::Press, .. }) = event::read()? {
+                match code {
                     KeyCode::Char('q') | KeyCode::Esc => break,
-                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
+                    KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => break,
                     KeyCode::Char('j') | KeyCode::Down => {
                         app.next();
                         terminal.clear()?;
@@ -153,6 +153,7 @@ pub fn run(
 
     // If Enter was pressed, open the file in the editor now that the terminal is restored.
     if let Some((file, line)) = app.open_in_editor {
+        eprintln!("Opening {}:{} …", file, line);
         crate::editor::open_with(&file, line, &repo_root, app.editor_cmd.as_deref())?;
     }
 
