@@ -158,33 +158,35 @@ The index lives in `.scout/` at your repo root. Tree-sitter parses each file int
 
 ## Install
 
-### Pre-built binary (recommended)
+It's a single binary. The same download covers both the CLI tool and the Claude Code integration.
 
-**macOS (Apple Silicon)**
+### macOS (Apple Silicon)
 ```bash
 curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-aarch64-apple-darwin.tar.gz | tar xz
 sudo mv scout /usr/local/bin/
 ```
 
-**macOS (Intel)**
+### macOS (Intel)
 ```bash
 curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-x86_64-apple-darwin.tar.gz | tar xz
 sudo mv scout /usr/local/bin/
 ```
 
-**Linux (x86_64)**
+### Linux (x86_64)
 ```bash
 curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-x86_64-unknown-linux-gnu.tar.gz | tar xz
 sudo mv scout /usr/local/bin/
 ```
 
-**Linux (ARM64)**
+### Linux (ARM64)
 ```bash
 curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-aarch64-unknown-linux-gnu.tar.gz | tar xz
 sudo mv scout /usr/local/bin/
 ```
 
-**Windows** — download `scout-x86_64-pc-windows-msvc.zip` from [Releases](https://github.com/ParthPatel00/scout/releases), extract, and add to PATH.
+### Windows
+
+Download `scout-x86_64-pc-windows-msvc.zip` from [Releases](https://github.com/ParthPatel00/scout/releases), extract, and add to PATH.
 
 ### Build from source
 
@@ -205,6 +207,34 @@ scout "query"   # search
 ```
 
 `scout init` is an 8-question wizard that sets everything up permanently. Run it once and never think about configuration again.
+
+---
+
+## Claude Code integration (MCP)
+
+Scout can act as a search tool inside Claude Code so Claude uses it automatically instead of running grep searches. Install the binary above, then add one entry to `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "scout": { "command": "scout", "args": ["mcp"] }
+  }
+}
+```
+
+Restart Claude Code. Scout will appear as a tool Claude calls whenever it needs to find code. For team-wide setup, add the same JSON to `.mcp.json` in your repo root and commit it.
+
+---
+
+## Keeping scout up to date
+
+```bash
+scout update
+```
+
+Checks GitHub for the latest release, downloads it, and replaces the binary in-place on all platforms. If you're using the MCP integration, restart Claude Code after updating.
+
+MCP users will also see a notice inside their Claude session when a new version is available.
 
 ---
 

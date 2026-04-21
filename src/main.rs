@@ -25,6 +25,7 @@ use crate::search::SearchFilter;
 const SUBCOMMANDS: &[&str] = &[
     "index", "search", "s", "repos", "report", "rebuild", "optimize",
     "cleanup", "daemon", "config", "init", "completions", "update", "stats",
+    "mcp",
     "help", "--help", "-h", "--version", "-V",
 ];
 
@@ -218,6 +219,19 @@ enum Command {
     Daemon {
         #[command(subcommand)]
         action: DaemonCommand,
+    },
+
+    /// Start a stdio MCP server for use with Claude Code and other MCP clients.
+    ///
+    /// Add to ~/.claude.json:
+    ///   { "mcpServers": { "scout": { "command": "scout", "args": ["mcp"] } } }
+    ///
+    /// Or per-project in .mcp.json:
+    ///   { "mcpServers": { "scout": { "command": "scout", "args": ["mcp"] } } }
+    Mcp {
+        /// Repository root to search [default: current directory].
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
     },
 }
 
@@ -471,6 +485,10 @@ fn main() -> Result<()> {
         Command::Cleanup { path } => {
             cli::maintenance::cleanup(cli::maintenance::CleanupArgs { path })?;
         }
+        Command::Mcp { path } => {
+            cli::mcp::run(cli::mcp::McpArgs { path })?;
+        }
+
         Command::Daemon { action } => match action {
             DaemonCommand::Start { path } => {
                 cli::daemon::start(cli::daemon::StartArgs { path })?;

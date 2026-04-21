@@ -154,7 +154,13 @@ fn install(binary: Vec<u8>) -> Result<()> {
     Ok(())
 }
 
-fn is_newer(candidate: &str, current: &str) -> bool {
+/// Returns the latest release version string (without leading 'v') from GitHub.
+pub fn fetch_latest_version() -> Result<String> {
+    let release = fetch_latest()?;
+    Ok(release.tag_name.trim_start_matches('v').to_string())
+}
+
+pub fn is_newer(candidate: &str, current: &str) -> bool {
     let parse = |s: &str| -> (u64, u64, u64) {
         let mut parts = s.split('.');
         let major = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);

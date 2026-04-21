@@ -3,6 +3,7 @@ pub mod daemon;
 pub mod index;
 pub mod init;
 pub mod maintenance;
+pub mod mcp;
 pub mod report;
 pub mod repos;
 pub mod search;
