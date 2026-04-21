@@ -2,22 +2,47 @@
 
 # Scout
 
-### Semantic code search that runs entirely on your machine.
+**Semantic code search for your codebase.**<br>
+Type what code *does*. Land at the exact line in your editor.
+
+<br>
+
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-000000?style=flat-square&logo=rust&logoColor=white)
+![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
+![Java](https://img.shields.io/badge/Java-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
+![C](https://img.shields.io/badge/C-A8B9CC?style=flat-square&logo=c&logoColor=black)
+![C++](https://img.shields.io/badge/C++-00599C?style=flat-square&logo=cplusplus&logoColor=white)
+
+<br>
+
+[![Rust](https://img.shields.io/badge/built_with-Rust-orange?style=flat-square)](https://www.rust-lang.org/)
+[![Version](https://img.shields.io/badge/version-0.1.10-blue?style=flat-square)](https://github.com/ParthPatel00/scout/releases)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)]()
+
+<br>
+
+![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple_Silicon-black?style=flat-square&logo=apple&logoColor=white)
+![macOS Intel](https://img.shields.io/badge/macOS-Intel-black?style=flat-square&logo=apple&logoColor=white)
+![Linux x86](https://img.shields.io/badge/Linux-x86__64-FCC624?style=flat-square&logo=linux&logoColor=black)
+![Linux ARM64](https://img.shields.io/badge/Linux-ARM64-FCC624?style=flat-square&logo=linux&logoColor=black)
+![Windows](https://img.shields.io/badge/Windows-x86__64-0078D4?style=flat-square&logo=windows&logoColor=white)
+
+<br>
+
+**No cloud &nbsp;·&nbsp; No API keys &nbsp;·&nbsp; No Python runtime &nbsp;·&nbsp; Single binary**
+
+</div>
+
+<br>
 
 ```bash
 scout "stripe payment retry logic"
 scout "where do we handle rate limiting"
 scout "function that validates JWT tokens"
 ```
-
-[![Rust](https://img.shields.io/badge/built_with-Rust-orange?style=flat-square)](https://www.rust-lang.org/)
-[![Platform](https://img.shields.io/badge/platform-macOS_·_Linux_·_Windows-lightgrey?style=flat-square)]()
-[![Version](https://img.shields.io/badge/version-0.1.10-blue?style=flat-square)](https://github.com/ParthPatel00/scout/releases)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)]()
-
-**No cloud. No API keys. No Python runtime. Single binary.**
-
-</div>
 
 ---
 
@@ -30,7 +55,7 @@ Scout is a code search CLI that understands **what code does**, not just what it
 ### Core capabilities
 
 - **Semantic search** — finds `check_token()` when you ask for "validate JWT", even with zero keyword overlap. Powered by a local UniXcoder model (~500 MB, one-time download, fully optional).
-- **AST-aware indexing** — tree-sitter parses 7 languages into functions, methods, and classes. Results are code units, not line matches.
+- **AST-aware indexing** — tree-sitter parses 8 languages into functions, methods, and classes. Results are code units, not line matches.
 - **Call graph context** — see what calls a function and what it calls with `--show-context`.
 - **Interactive TUI** — browse results with syntax-highlighted previews, navigate with `j`/`k`, press `Enter` to jump to that exact line in your editor.
 - **Direct editor integration** — opens VS Code, Cursor, Neovim, Zed, Helix, nano, or any terminal editor at the right line. Detects your editor automatically.
@@ -40,10 +65,6 @@ Scout is a code search CLI that understands **what code does**, not just what it
 - **Incremental indexing** — re-indexes only changed files. A 10,000-function repo updates in under 2 seconds.
 - **Scriptable output** — `--format json` or `--format csv` for piping into other tools.
 - **Shell completions** — Zsh, Bash, and Fish, installable with one command.
-
-### Supported languages
-
-Python, Rust, Go, TypeScript, JavaScript, Java, C, C++ — with full function, method, and class extraction plus call graph analysis.
 
 ### How fast
 
@@ -330,14 +351,15 @@ Benchmarked on an M2 MacBook Pro against a 10,000-function codebase:
 ## Supported languages
 
 | Language | Functions | Methods | Classes | Call graph |
-|---|:---:|:---:|:---:|:---:|
-| Python | ✓ | ✓ | ✓ | ✓ |
-| Rust | ✓ | ✓ | ✓ | ✓ |
-| Go | ✓ | ✓ | ✓ | ✓ |
-| TypeScript | ✓ | ✓ | ✓ | ✓ |
-| JavaScript | ✓ | ✓ | ✓ | ✓ |
-| Java | ✓ | ✓ | ✓ | ✓ |
-| C / C++ | ✓ | ✓ | ✓ | Partial |
+|:---|:---:|:---:|:---:|:---:|
+| ![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white) | ✓ | ✓ | ✓ | ✓ |
+| ![Rust](https://img.shields.io/badge/Rust-000000?style=flat-square&logo=rust&logoColor=white) | ✓ | ✓ | ✓ | ✓ |
+| ![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white) | ✓ | ✓ | ✓ | ✓ |
+| ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white) | ✓ | ✓ | ✓ | ✓ |
+| ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black) | ✓ | ✓ | ✓ | ✓ |
+| ![Java](https://img.shields.io/badge/Java-ED8B00?style=flat-square&logo=openjdk&logoColor=white) | ✓ | ✓ | ✓ | ✓ |
+| ![C](https://img.shields.io/badge/C-A8B9CC?style=flat-square&logo=c&logoColor=black) | ✓ | ✓ | ✓ | Partial |
+| ![C++](https://img.shields.io/badge/C++-00599C?style=flat-square&logo=cplusplus&logoColor=white) | ✓ | ✓ | ✓ | Partial |
 
 ---
 
@@ -349,7 +371,7 @@ Built in Rust for performance and a single distributable binary.
 |---|---|
 | CLI | clap |
 | TUI | Ratatui + Crossterm |
-| Code parsing | Tree-sitter (7 language grammars) |
+| Code parsing | Tree-sitter (8 language grammars) |
 | Full-text index | Tantivy (BM25) |
 | Metadata + call graph | SQLite (WAL mode) |
 | AI embeddings | Candle (pure Rust) running UniXcoder locally |
@@ -373,20 +395,26 @@ Or let `scout init` install them automatically.
 
 ## FAQ
 
-**Does Scout send my code anywhere?**
-No. Everything runs locally. No network requests unless you download the AI model or run `scout update`.
+### Does Scout send my code anywhere?
 
-**How is this different from `grep` or `ripgrep`?**
-`grep` finds text. Scout finds functions — it understands code structure. `scout "validate JWT"` surfaces a function called `check_token` whose body handles JWT validation, even if "validate JWT" never appears in its source.
+No. Everything runs locally. No network requests unless you explicitly download the AI model or run `scout update`.
 
-**How is this different from GitHub code search?**
-GitHub requires your code to be on GitHub. Scout works on private repos, local clones, and fully offline.
+### How is this different from `grep` or `ripgrep`?
 
-**How big can the codebase be?**
+`grep` finds text. Scout finds functions — it understands code structure. `scout "validate JWT"` surfaces a function called `check_token` whose body handles JWT validation, even if the words "validate JWT" never appear in its source.
+
+### How is this different from GitHub code search?
+
+GitHub requires your code to be on GitHub. Scout works on private repos, local clones, and fully offline. No account required.
+
+### How big can the codebase be?
+
 Tested on repos with 100,000+ functions. Search stays under 30ms. First index of a monorepo that size takes a few minutes; subsequent runs skip unchanged files.
 
-**Is the AI model required?**
+### Is the AI model required?
+
 No. BM25 + name-match works immediately with no download. The AI model adds concept-level search on top — `scout "expire stale sessions"` can then surface `refresh_credentials()` without any keyword overlap.
 
-**Is Rust required?**
-Only to build from source. Pre-built binaries for all platforms are on the [Releases](https://github.com/ParthPatel00/scout/releases) page.
+### Is Rust required?
+
+Only to build from source. Pre-built binaries for macOS, Linux, and Windows are on the [Releases](https://github.com/ParthPatel00/scout/releases) page — no Rust needed to use Scout.
