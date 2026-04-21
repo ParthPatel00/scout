@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 
 /// Open `file_path` (relative to `repo_root`) at `line` in the user's editor.
 ///
@@ -87,19 +87,22 @@ pub fn open_with(
                 .map(|_| ())
                 .map_err(|e| anyhow::anyhow!("Failed to launch {cmd}: {e}"))?;
         }
-        Editor::None => {
-            bail!(
-                "No editor found. Set $SCOUT_EDITOR, $VISUAL, or $EDITOR.\n  \
-                 Example: export SCOUT_EDITOR=nvim"
-            );
+        Editor::Plain(cmd) => {
+            // Editors that don't support +LINE (e.g. notepad) — open file only.
+            std::process::Command::new(&cmd)
+                .arg(&abs_str)
+                .status()
+                .map(|_| ())
+                .map_err(|e| anyhow::anyhow!("Failed to launch {cmd}: {e}"))?;
         }
     }
 
     Ok(())
 }
 
-/// Return the name of the detected editor without opening anything.
-/// Used by `scout init` to show the user what was auto-detected.
+/// Return the name of the editor that will be used by default (without opening anything).
+/// Used by `scout init` to show the user what will be auto-detected at runtime.
+/// Always returns Some — falls back to the platform's guaranteed terminal editor.
 pub fn detect_name() -> Option<String> {
     for var in &["SCOUT_EDITOR", "VISUAL", "EDITOR"] {
         if let Ok(val) = std::env::var(var) {
@@ -110,15 +113,19 @@ pub fn detect_name() -> Option<String> {
         }
     }
     #[cfg(windows)]
-    let candidates = &["code.cmd", "code", "nvim", "notepad"][..];
+    let candidates = &["nvim", "vim", "nano", "notepad"][..];
     #[cfg(not(windows))]
-    let candidates = &["code", "cursor", "zed", "nvim", "vim", "hx", "nano", "emacs"][..];
+    let candidates = &["nano", "nvim", "vim", "vi"][..];
     for cmd in candidates {
         if cmd_in_path(cmd) {
             return Some(cmd.to_string());
         }
     }
-    None
+    // Guaranteed fallback.
+    #[cfg(windows)]
+    return Some("notepad".to_string());
+    #[cfg(not(windows))]
+    Some("vi".to_string())
 }
 
 // ─── Detection ────────────────────────────────────────────────────────────────
@@ -127,12 +134,14 @@ enum Editor {
     VSCode(String), // stores the command basename ("code" or "cursor")
     Zed,
     Helix,
-    Terminal(String),
-    None,
+    Terminal(String), // supports `+LINE file` syntax (vi, vim, nvim, nano, emacs, …)
+    Plain(String),    // opens file only, no line-number arg (notepad)
 }
 
 fn detect() -> Editor {
-    // Priority: SCOUT_EDITOR > VISUAL > EDITOR > auto-detect from PATH.
+    // Priority: SCOUT_EDITOR > VISUAL > EDITOR > terminal editor from PATH > guaranteed fallback.
+    // GUI editors (code, cursor, zed) are NOT auto-detected — they must be set explicitly
+    // via `scout init`, $SCOUT_EDITOR, or $VISUAL/$EDITOR.
     for var in &["SCOUT_EDITOR", "VISUAL", "EDITOR"] {
         if let Ok(val) = std::env::var(var) {
             let val = val.trim().to_string();
@@ -142,13 +151,11 @@ fn detect() -> Editor {
         }
     }
 
-    // Auto-detect: prefer VS Code / GUI editors first so results open in the
-    // editor the user is most likely already working in.
-    // On Windows, VS Code registers as `code.cmd`; check that too.
+    // Terminal editors only — work in any terminal without extra setup.
     #[cfg(windows)]
-    let candidates = &["code.cmd", "code", "nvim", "notepad"][..];
+    let candidates = &["nvim", "vim", "nano", "notepad"][..];
     #[cfg(not(windows))]
-    let candidates = &["code", "cursor", "zed", "nvim", "vim", "hx", "nano", "emacs"][..];
+    let candidates = &["nano", "nvim", "vim", "vi"][..];
 
     for cmd in candidates {
         if cmd_in_path(cmd) {
@@ -156,37 +163,11 @@ fn detect() -> Editor {
         }
     }
 
-    // macOS: VS Code/Cursor may be installed without the CLI in PATH.
-    // Check bundle path first (fast, no subprocess), then fall back to `open -Ra`
-    // which uses Launch Services to find any installed app regardless of location.
-    #[cfg(target_os = "macos")]
-    for (app, label) in &[
-        ("Visual Studio Code", "code"),
-        ("Cursor", "cursor"),
-    ] {
-        // 1. Check well-known bundle CLI paths.
-        let bin_name = if *label == "cursor" { "cursor" } else { "code" };
-        for base in &[
-            "/Applications".to_string(),
-            format!("{}/Applications", std::env::var("HOME").unwrap_or_default()),
-        ] {
-            let bundle = format!("{base}/{app}.app/Contents/Resources/app/bin/{bin_name}");
-            if std::path::Path::new(&bundle).exists() {
-                return classify(label.to_string());
-            }
-        }
-        // 2. Use `open -Ra <AppName>` — exits 0 if the app exists anywhere on the system.
-        if let Ok(status) = std::process::Command::new("open")
-            .args(["-Ra", app])
-            .status()
-        {
-            if status.success() {
-                return classify(label.to_string());
-            }
-        }
-    }
-
-    Editor::None
+    // Guaranteed fallback — always present on the platform.
+    #[cfg(windows)]
+    return Editor::Plain("notepad".to_string());
+    #[cfg(not(windows))]
+    Editor::Terminal("vi".to_string())
 }
 
 /// Map an editor command string to its open strategy.
@@ -204,6 +185,8 @@ fn classify(cmd: String) -> Editor {
         Editor::Zed
     } else if base == "hx" || base.contains("helix") {
         Editor::Helix
+    } else if base == "notepad" || base == "notepad.exe" {
+        Editor::Plain(cmd)
     } else {
         Editor::Terminal(cmd)
     }

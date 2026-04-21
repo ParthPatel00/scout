@@ -99,7 +99,7 @@ pub fn run() -> Result<()> {
     let editor_idx = Select::with_theme(&theme)
         .with_prompt("Editor for opening results")
         .items(&editor_items)
-        .default(if detected.is_some() { 0 } else { 1 })
+        .default(0) // auto-detect always pre-selected; always returns Some now
         .interact()?;
 
     cfg.editor.command = match editor_idx {
@@ -311,18 +311,18 @@ fn install_completions(shell: &str) {
 fn build_editor_choices(detected: &Option<String>) -> Vec<String> {
     let det_label = detected
         .as_deref()
-        .map(|d| format!("Auto-detect  (currently: {})", d))
-        .unwrap_or_else(|| "Auto-detect  (none found — set $SCOUT_EDITOR)".to_string());
+        .map(|d| format!("Default  ({})", d))
+        .unwrap_or_else(|| "Default  (vi)".to_string());
 
     vec![
         det_label,
-        "code   — VS Code".to_string(),
-        "cursor — Cursor".to_string(),
-        "zed    — Zed".to_string(),
-        "nvim   — Neovim".to_string(),
-        "vim    — Vim".to_string(),
-        "hx     — Helix".to_string(),
-        "nano   — Nano".to_string(),
+        "nano   — Nano (terminal)".to_string(),
+        "nvim   — Neovim (terminal)".to_string(),
+        "vim    — Vim (terminal)".to_string(),
+        "hx     — Helix (terminal)".to_string(),
+        "code   — VS Code (GUI)".to_string(),
+        "cursor — Cursor (GUI)".to_string(),
+        "zed    — Zed (GUI)".to_string(),
         "Other  — enter path".to_string(),
     ]
 }

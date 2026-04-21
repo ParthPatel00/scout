@@ -47,7 +47,7 @@ pub fn run(args: StatsArgs) -> Result<()> {
             .collect();
         rows
     };
-    by_type.sort_by(|a, b| b.1.cmp(&a.1));
+    by_type.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     // Per-language breakdown
     let by_lang: Vec<(String, i64)> = {
