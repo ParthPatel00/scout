@@ -223,8 +223,10 @@ fn vscode_binary(cmd: &str) -> String {
     {
         let (app_name, bin_name) = if cmd == "cursor" {
             ("Cursor", "cursor")
-        } else {
+        } else if cmd == "code" {
             ("Visual Studio Code", "code")
+        } else {
+            return cmd.to_string();
         };
         for base in &["/Applications", &format!("{}/Applications", std::env::var("HOME").unwrap_or_default())] {
             let bundle = format!("{base}/{app_name}.app/Contents/Resources/app/bin/{bin_name}");
