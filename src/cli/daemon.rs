@@ -250,7 +250,7 @@ pub fn install_hooks(args: InstallHooksArgs) -> Result<()> {
              (\n  \
              mkdir \"{lock}\" 2>/dev/null || exit 0\n  \
              trap 'rmdir \"{lock}\" 2>/dev/null' EXIT INT TERM\n  \
-             \"{exe}\" update --path \"{root}\" >/dev/null 2>&1\n\
+             \"{exe}\" daemon update --path \"{root}\" >/dev/null 2>&1\n\
              ) &\n",
             lock = lock_dir.display(),
             exe  = exe_str,

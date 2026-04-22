@@ -229,11 +229,38 @@ fn run_cross_repo(args: &SearchArgs) -> Result<()> {
 }
 
 fn run_find_similar(args: &SearchArgs, loc: &str) -> Result<()> {
-    let (file_path, line) = parse_file_line(loc)?;
+    let (raw_file_path, line) = parse_file_line(loc)?;
     let root = args.path.canonicalize().context("path not found")?;
+
+    // If the user passed an absolute path, canonicalize it and strip the repo
+    // root to produce the relative path stored in the index. This handles the
+    // macOS /var -> /private/var symlink and any other canonicalization deltas.
+    let file_path = {
+        let p = std::path::Path::new(&raw_file_path);
+        if p.is_absolute() {
+            let canonical = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+            canonical
+                .strip_prefix(&root)
+                .map(|r| r.to_string_lossy().to_string())
+                .unwrap_or_else(|_| raw_file_path.clone())
+        } else {
+            raw_file_path
+        }
+    };
+
     let registry = Registry::load()?;
 
-    let hits = cross_repo::find_similar(&registry, &root, &file_path, line, args.limit)?;
+    let hits = match cross_repo::find_similar(&registry, &root, &file_path, line, args.limit) {
+        Ok(h) => h,
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("No vector store") || msg.contains("no embedding") {
+                eprintln!("{msg}");
+                return Ok(());
+            }
+            return Err(e);
+        }
+    };
 
     if hits.is_empty() {
         eprintln!("No similar functions found.");
