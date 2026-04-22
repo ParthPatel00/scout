@@ -213,10 +213,9 @@ fn has_bad_content(path: &Path) -> bool {
         return true;
     }
 
-    let header = match std::str::from_utf8(bytes) {
-        Ok(s) => s,
-        Err(_) => return true, // not valid UTF-8 → skip
-    };
+    // Use lossy conversion so a multi-byte sequence cut at the 512-byte boundary
+    // doesn't cause valid UTF-8 source files to be silently skipped.
+    let header = String::from_utf8_lossy(bytes);
 
     // Generated-file markers.
     if GENERATED_MARKERS.iter().any(|m| header.contains(m)) {

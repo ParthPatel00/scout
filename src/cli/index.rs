@@ -42,7 +42,7 @@ pub fn run(args: IndexArgs) -> Result<()> {
 
     let files = walker::walk_source_files(&root);
     if args.verbose {
-        println!("Found {} source files to consider", files.len());
+        eprintln!("Found {} source files to consider", files.len());
     }
 
     let pb = ProgressBar::new(files.len() as u64);
@@ -138,7 +138,7 @@ pub fn run(args: IndexArgs) -> Result<()> {
         indexed += 1;
 
         if args.verbose {
-            println!("  indexed ({unit_count} units): {rel_path}");
+            eprintln!("  indexed ({unit_count} units): {rel_path}");
         }
     }
 
@@ -161,12 +161,12 @@ pub fn run(args: IndexArgs) -> Result<()> {
     index::save_metadata(&idx_dir, &meta)?;
 
     let elapsed = start.elapsed();
-    println!(
+    eprintln!(
         "Indexed {indexed} files ({total_units} new units, {skipped} unchanged) in {:.2}s",
         elapsed.as_secs_f64()
     );
-    println!(
-        "Index totals: {} files, {} units — {}",
+    eprintln!(
+        "Index totals: {} files, {} units - {}",
         meta.num_files,
         meta.num_units,
         idx_dir.display()

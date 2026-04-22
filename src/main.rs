@@ -325,6 +325,21 @@ fn main() -> Result<()> {
         && !SUBCOMMANDS.contains(&raw[1].as_str())
         && !raw[1].starts_with('-')
     {
+        // Warn if a single bare word closely matches a known subcommand name,
+        // in case the user made a typo (e.g. "scout stat" instead of "scout stats").
+        if raw.len() == 2 {
+            let candidate = raw[1].to_lowercase();
+            let close_match = SUBCOMMANDS.iter().any(|&sub| {
+                !sub.starts_with('-') && sub.len() > 2 && sub.starts_with(&candidate[..])
+            });
+            if close_match {
+                eprintln!(
+                    "hint: '{}' is not a subcommand; treating as a search query. \
+                     Run `scout --help` to see available commands.",
+                    raw[1]
+                );
+            }
+        }
         let mut a = vec![raw[0].clone(), "search".to_string()];
         a.extend_from_slice(&raw[1..]);
         a

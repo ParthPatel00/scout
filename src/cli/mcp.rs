@@ -83,7 +83,6 @@ fn serve(
             // initialize: respond then send our own initialized notification.
             ("initialize", Some(id)) => {
                 write_msg(writer, &handle_initialize(id))?;
-                write_msg(writer, &json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }))?;
             }
 
             ("tools/list", Some(id)) => {

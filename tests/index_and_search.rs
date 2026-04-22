@@ -195,12 +195,12 @@ fn index_reports_file_and_unit_counts() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success());
-    // Should report at least 3 files (login.py, processor.rs, api.ts)
+    // Should report at least 3 files (login.py, processor.rs, api.ts) — on stderr now.
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stdout.contains("files"),
-        "output should report indexed files\n{stdout}"
+        stderr.contains("files"),
+        "output should report indexed files\n{stderr}"
     );
 }
 
@@ -1465,11 +1465,11 @@ fn index_verbose_shows_parsed_files() {
         .unwrap();
 
     assert!(output.status.success(), "index --verbose failed");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    // Verbose mode should show each file being parsed.
+    // Verbose mode should show each file being parsed — on stderr now.
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stdout.contains(".py") || stdout.contains(".rs") || stdout.contains(".ts"),
-        "verbose output must mention source files\n{stdout}"
+        stderr.contains(".py") || stderr.contains(".rs") || stderr.contains(".ts"),
+        "verbose output must mention source files\n{stderr}"
     );
 }
 

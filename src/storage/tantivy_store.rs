@@ -172,11 +172,21 @@ pub fn search(
     let query = match query_parser.parse_query(query_str) {
         Ok(q) => q,
         Err(_) => {
-            // Fall back to escaped literal search if the query is malformed.
+            // First fallback: escape Tantivy special chars.
             let escaped = escape_query(query_str);
-            query_parser
-                .parse_query(&escaped)
-                .context("failed to parse search query")?
+            match query_parser.parse_query(&escaped) {
+                Ok(q) => q,
+                Err(_) => {
+                    // Second fallback: strip everything except alphanumerics and whitespace.
+                    let safe: String = query_str
+                        .chars()
+                        .map(|c| if c.is_alphanumeric() || c.is_whitespace() { c } else { ' ' })
+                        .collect();
+                    query_parser
+                        .parse_query(safe.trim())
+                        .context("failed to parse search query")?
+                }
+            }
         }
     };
 
