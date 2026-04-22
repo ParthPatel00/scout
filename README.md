@@ -19,7 +19,7 @@ One command. No cloud. No API keys. Lands at the exact line in your editor.
 <br>
 
 [![Rust](https://img.shields.io/badge/built_with-Rust-orange?style=flat-square)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.1.12-blue?style=flat-square)](https://github.com/ParthPatel00/scout/releases)
+[![Version](https://img.shields.io/badge/version-0.1.13-blue?style=flat-square)](https://github.com/ParthPatel00/scout/releases)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)]()
 
 <br>
@@ -43,6 +43,31 @@ scout "stripe payment retry logic"
 scout "where do we handle rate limiting"
 scout "function that validates JWT tokens"
 ```
+
+---
+
+## Table of Contents
+
+- [What Scout is](#what-scout-is)
+- [The problem](#the-problem)
+- [What it looks like](#what-it-looks-like)
+- [How it works](#how-it-works)
+- [Why Scout beats the alternatives](#why-scout-beats-the-alternatives)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Claude Code integration (MCP)](#claude-code-integration-mcp)
+- [Keeping scout up to date](#keeping-scout-up-to-date)
+- [Searching](#searching)
+- [Cross-repo search](#cross-repo-search)
+- [Keeping the index current](#keeping-the-index-current)
+- [Editor integration](#editor-integration)
+- [Configuration](#configuration)
+- [Index maintenance](#index-maintenance)
+- [Performance](#performance)
+- [Supported languages](#supported-languages)
+- [Tech stack](#tech-stack)
+- [Shell completions](#shell-completions)
+- [FAQ](#faq)
 
 ---
 
