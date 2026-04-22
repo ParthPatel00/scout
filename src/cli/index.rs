@@ -80,7 +80,7 @@ pub fn run(args: IndexArgs) -> Result<()> {
         if let Ok(Some(stored_hash)) = sqlite::get_file_hash(&conn, &rel_path) {
             if stored_hash == hash {
                 if args.verbose {
-                    println!("  skip (unchanged): {rel_path}");
+                    eprintln!("  skip (unchanged): {rel_path}");
                 }
                 skipped += 1;
                 continue;

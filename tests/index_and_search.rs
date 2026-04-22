@@ -216,11 +216,11 @@ fn incremental_reindex_skips_unchanged_files() {
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stdout.contains("unchanged") || stdout.contains("0 new units"),
-        "second index run should skip unchanged files\n{stdout}"
+        stderr.contains("unchanged") || stderr.contains("0 new units"),
+        "second index run should skip unchanged files\n{stderr}"
     );
 }
 
@@ -247,12 +247,12 @@ def exchange_code_for_token(code: str) -> str:
         .output()
         .unwrap();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success());
-    // The modified file must be re-indexed (not skipped)
+    // The modified file must be re-indexed (not skipped).
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        !stdout.contains("skip (unchanged): services/auth/login.py"),
-        "modified file should NOT be skipped\n{stdout}"
+        !stderr.contains("skip (unchanged): services/auth/login.py"),
+        "modified file should NOT be skipped\n{stderr}"
     );
 }
 
