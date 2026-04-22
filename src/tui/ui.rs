@@ -181,7 +181,9 @@ fn render_help_bar(f: &mut Frame, area: Rect) {
     let key = |s| Span::styled(s, Style::default().fg(Color::Yellow));
     let dim = |s| Span::styled(s, Style::default().fg(Color::DarkGray));
     let help = Line::from(vec![
-        key(" j/k"),
+        key(" ↑/↓"),
+        dim(" or "),
+        key("j/k"),
         dim(": navigate  "),
         key("Enter"),
         dim(": open in editor  "),

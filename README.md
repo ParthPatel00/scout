@@ -2,8 +2,8 @@
 
 # Scout
 
-**Semantic code search for your codebase.**<br>
-Type what code *does*. Land at the exact line in your editor.
+**Search your codebase by what code *does*, not what it says.**<br>
+One command. No cloud. No API keys. Lands at the exact line in your editor.
 
 <br>
 
@@ -19,7 +19,7 @@ Type what code *does*. Land at the exact line in your editor.
 <br>
 
 [![Rust](https://img.shields.io/badge/built_with-Rust-orange?style=flat-square)](https://www.rust-lang.org/)
-[![Version](https://img.shields.io/badge/version-0.1.10-blue?style=flat-square)](https://github.com/ParthPatel00/scout/releases)
+[![Version](https://img.shields.io/badge/version-0.1.12-blue?style=flat-square)](https://github.com/ParthPatel00/scout/releases)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)]()
 
 <br>
@@ -48,22 +48,23 @@ scout "function that validates JWT tokens"
 
 ## What Scout is
 
-Scout is a code search CLI that understands **what code does**, not just what it says. It parses every function, method, and class in your codebase using AST analysis, indexes them with BM25 full-text search, and optionally layers in local AI vector embeddings. Type what you're looking for in plain English and land at the exact line in your editor in under a second.
+Scout is a code search CLI that **understands what code does, not just what it says**. It uses tree-sitter to parse every function, method, and class in your repo into a structured index, then fuses BM25 full-text search with optional local AI vector embeddings. Type a concept in plain English, get ranked results in under 10ms, and press Enter to jump straight to that line in your editor.
 
-**Everything runs on your machine.** No server, no account, no internet connection required.
+**Everything runs on your machine.** No server, no account, no internet connection required after install.
 
 ### Core capabilities
 
 - **Semantic search** — finds `check_token()` when you ask for "validate JWT", even with zero keyword overlap. Powered by a local UniXcoder model (~500 MB, one-time download, fully optional).
 - **AST-aware indexing** — tree-sitter parses 8 languages into functions, methods, and classes. Results are code units, not line matches.
 - **Call graph context** — see what calls a function and what it calls with `--show-context`.
-- **Interactive TUI** — browse results with syntax-highlighted previews, navigate with `j`/`k`, press `Enter` to jump to that exact line in your editor.
+- **Interactive TUI** — browse results with syntax-highlighted previews, navigate with arrow keys or `j`/`k`, press `Enter` to jump to the exact line in your editor.
 - **Direct editor integration** — opens VS Code, Cursor, Neovim, Zed, Helix, nano, or any terminal editor at the right line. Detects your editor automatically.
 - **Cross-repo search** — register multiple codebases and search all of them at once with `--all-repos`.
 - **Language and path filters** — narrow results with `--lang python`, `--path-filter services/payments`, or both.
 - **Background daemon and git hooks** — keep the index current automatically without ever thinking about it.
 - **Incremental indexing** — re-indexes only changed files. A 10,000-function repo updates in under 2 seconds.
 - **Scriptable output** — `--format json` or `--format csv` for piping into other tools.
+- **Claude Code integration (MCP)** — Scout becomes a search tool Claude calls automatically instead of running dozens of grep searches.
 - **Shell completions** — Zsh, Bash, and Fish, installable with one command.
 
 ### How fast
@@ -76,7 +77,7 @@ BM25 search returns in **under 10ms**. Hybrid search across 50,000 functions run
 
 Every developer knows this: you're dropped into a codebase and need to find something. You know *what* it does. You don't know *what it's called*.
 
-`grep` and `ripgrep` are fast, but they find text — not intent. GitHub search requires your code to be on GitHub. AI assistants hallucinate file names. So you end up clicking through folders for 20 minutes.
+`grep` and `ripgrep` are fast, but they find text, not intent. GitHub search requires your code to be on GitHub. AI assistants hallucinate file names. So you end up clicking through folders for 20 minutes.
 
 **Scout fixes this.** It parses your code into functions and classes using tree-sitter AST analysis, indexes them with BM25 full-text search, and optionally fuses in local AI vector embeddings. Type what you're looking for in plain English and get results in under 10ms.
 
@@ -100,7 +101,7 @@ services/payments/processor.py:206  capture_payment       function · python
   def capture_payment(self, payment_intent_id:
 ```
 
-In a terminal, Scout launches an interactive TUI. Navigate with `j`/`k`, press `Enter` to jump to that exact line in your editor:
+In a terminal, Scout launches an interactive TUI. Navigate with arrow keys or `j`/`k`, press `Enter` to jump to that exact line in your editor:
 
 ```
 ┌─ Results (10) ────────────────────────┐┌─ Preview ──────────────────────────────────────────────────────┐
@@ -115,7 +116,7 @@ In a terminal, Scout launches an interactive TUI. Navigate with `j`/`k`, press `
 │  9. class     AuthenticationError     ││             algorithms=["HS256"]                               │
 │ 10. function  _validate_password_str… ││         )                                                      │
 └───────────────────────────────────────┘└────────────────────────────────────────────────────────────────┘
- j/k: navigate   Enter: open in editor   o: open (stay)   d/u: scroll   q: quit
+ ↑/↓ or j/k: navigate   Enter: open in editor   o: open (stay)   d/u: scroll   q: quit
 ```
 
 ---
@@ -151,6 +152,7 @@ The index lives in `.scout/` at your repo root. Tree-sitter parses each file int
 | No infrastructure needed | Yes | Yes | No | **Yes** |
 | Call graph context | No | No | Yes | **Yes** |
 | Cross-repo search | No | No | Yes | **Yes** |
+| Claude Code integration | No | No | No | **Yes** |
 | Single binary, no runtime | Yes | No | No | **Yes** |
 | Query time | <1ms | Varies | ~100ms | **<10ms** |
 
@@ -158,71 +160,104 @@ The index lives in `.scout/` at your repo root. Tree-sitter parses each file int
 
 ## Install
 
-It's a single binary. The same download covers both the CLI tool and the Claude Code integration.
-
-### macOS (Apple Silicon)
-```bash
-curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-aarch64-apple-darwin.tar.gz | tar xz
-sudo mv scout /usr/local/bin/
-```
-
-### macOS (Intel)
-```bash
-curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-x86_64-apple-darwin.tar.gz | tar xz
-sudo mv scout /usr/local/bin/
-```
-
-### Linux (x86_64)
-```bash
-curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-x86_64-unknown-linux-gnu.tar.gz | tar xz
-sudo mv scout /usr/local/bin/
-```
-
-### Linux (ARM64)
-```bash
-curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-aarch64-unknown-linux-gnu.tar.gz | tar xz
-sudo mv scout /usr/local/bin/
-```
-
-### Windows
-
-Download `scout-x86_64-pc-windows-msvc.zip` from [Releases](https://github.com/ParthPatel00/scout/releases), extract, and add to PATH.
-
-### Build from source
+Single binary. One command on macOS/Linux:
 
 ```bash
-git clone https://github.com/ParthPatel00/scout
-cd scout
-cargo build --release
-sudo cp target/release/scout /usr/local/bin/
+# macOS (Apple Silicon)
+curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-aarch64-apple-darwin.tar.gz | tar xz && sudo mv scout /usr/local/bin/
+
+# macOS (Intel)
+curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-x86_64-apple-darwin.tar.gz | tar xz && sudo mv scout /usr/local/bin/
+
+# Linux (x86_64)
+curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-x86_64-unknown-linux-gnu.tar.gz | tar xz && sudo mv scout /usr/local/bin/
+
+# Linux (ARM64)
+curl -L https://github.com/ParthPatel00/scout/releases/latest/download/scout-aarch64-unknown-linux-gnu.tar.gz | tar xz && sudo mv scout /usr/local/bin/
 ```
 
----
+**Windows:** Download `scout-x86_64-pc-windows-msvc.zip` from [Releases](https://github.com/ParthPatel00/scout/releases), extract, add to PATH.
 
-## Quick start
-
+**Build from source:**
 ```bash
-scout init      # one-time setup: indexes your repo, sets preferences, installs completions
-scout "query"   # search
+git clone https://github.com/ParthPatel00/scout && cd scout
+cargo build --release && sudo cp target/release/scout /usr/local/bin/
 ```
 
-`scout init` is an 8-question wizard that sets everything up permanently. Run it once and never think about configuration again.
+Then run `scout init` — an 8-question wizard that indexes your repo, sets preferences, and installs shell completions. Run it once and never think about configuration again.
 
 ---
 
 ## Claude Code integration (MCP)
 
-Scout can act as a search tool inside Claude Code so Claude uses it automatically instead of running grep searches. Install the binary above, then add one entry to `~/.claude.json`:
+> Stop Claude from grep-ing through your codebase 30 times per task. Scout replaces all of that with a single semantic search call.
+
+When you add Scout as an MCP server, Claude Code gets access to two tools it will use automatically:
+
+- **`scout_search`** — hybrid semantic + BM25 search over your indexed codebase. Claude calls this instead of running multiple grep/glob searches whenever it needs to find a function, class, or concept. One call returns ranked, structured results with file paths and line numbers.
+- **`scout_index`** — lets Claude index a repository on demand if no index exists yet. Claude will call this automatically if `scout_search` tells it there's no index.
+
+### How to set it up (2 minutes)
+
+**Step 1: Install Scout** (see above)
+
+**Step 2: Index your repo**
+```bash
+cd your-project
+scout index
+```
+
+**Step 3: Add Scout to Claude Code**
+
+Open (or create) `~/.claude.json` and add:
 
 ```json
 {
   "mcpServers": {
-    "scout": { "command": "scout", "args": ["mcp"] }
+    "scout": {
+      "command": "scout",
+      "args": ["mcp"]
+    }
   }
 }
 ```
 
-Restart Claude Code. Scout will appear as a tool Claude calls whenever it needs to find code. For team-wide setup, add the same JSON to `.mcp.json` in your repo root and commit it.
+**Step 4: Restart Claude Code.** That's it.
+
+Claude will now call `scout_search` whenever it looks for code instead of running grep. For team-wide setup, add the same config to `.mcp.json` at your repo root and commit it — every teammate gets Scout automatically when they open the project in Claude Code.
+
+### Per-project setup (for teams)
+
+Create `.mcp.json` in your repo root:
+
+```json
+{
+  "mcpServers": {
+    "scout": {
+      "command": "scout",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Commit it. Everyone who opens the project in Claude Code gets Scout as a search tool without any manual configuration.
+
+### What changes
+
+Before Scout, Claude would run 10-30 grep/glob searches to find relevant functions. With Scout, it runs one `scout_search` call and gets ranked results immediately. Fewer tool calls means faster responses, lower token usage, and Claude spending more time reasoning instead of searching.
+
+### Searching from Claude
+
+You can also tell Claude to use Scout directly:
+
+```
+"Use scout_search to find where we handle payment failures"
+"Find all authentication-related functions in the auth service"
+"Search for functions similar to validate_token"
+```
+
+Or just ask Claude a coding question and watch it reach for `scout_search` instead of grep.
 
 ---
 
@@ -232,9 +267,18 @@ Restart Claude Code. Scout will appear as a tool Claude calls whenever it needs 
 scout update
 ```
 
-Checks GitHub for the latest release, downloads it, and replaces the binary in-place on all platforms. If you're using the MCP integration, restart Claude Code after updating.
+Checks GitHub for the latest release, downloads it, and replaces the binary in-place on all platforms. If you're using the MCP integration, restart Claude Code after updating to load the new binary.
 
-MCP users will also see a notice inside their Claude session when a new version is available.
+MCP users will also see a notice inside their Claude session when a new version is available — no need to check manually.
+
+---
+
+## Quick start
+
+```bash
+scout init      # one-time setup: indexes your repo, sets preferences, installs completions
+scout "query"   # search
+```
 
 ---
 
